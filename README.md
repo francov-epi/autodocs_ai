@@ -22,9 +22,6 @@ pega el prompt real de cada Gem una vez diseñado directamente en Gemini.
 
 ## Arquitectura
 
-Misma arquitectura en capas que el resto de los proyectos de la familia
-"AI OS" (Flask + SQLite, sin frameworks pesados):
-
 ```
 app.py                     # entry point
 core/
@@ -55,7 +52,6 @@ ui/
 ```bash
 pip install -r requirements.txt
 setx GOOGLE_API_KEY "tu-api-key-de-gemini"      # Windows
-# export GOOGLE_API_KEY="tu-api-key-de-gemini"  # Linux/Mac
 python app.py
 ```
 
