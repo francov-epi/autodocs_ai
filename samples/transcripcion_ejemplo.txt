@@ -1,0 +1,14 @@
+Analista: Buenas, gracias por el tiempo. Vamos a relevar el proceso de conciliación de saldos con el banco.
+Cliente: Dale, así es como lo hacemos hoy. Todos los días a la mañana ingresamos al portal del banco.
+Cliente: Hacemos clic en "Descargar extracto" y bajamos el archivo Excel del día anterior.
+Cliente: Después abrimos el ERP interno, ingresamos usuario y clave, y completamos el módulo de tesorería.
+Cliente: Ahí seleccionamos la cuenta corriente correspondiente y subimos el extracto que descargamos.
+Cliente: El sistema concilia automáticamente los movimientos que coinciden por número de comprobante.
+Cliente: Cuando hay una diferencia mayor al 5% entre el saldo del banco y el ERP, se requiere aprobación de un supervisor antes de continuar.
+Cliente: Si aparece una cuenta que no existe en el ERP, hay que derivarla a mesa de ayuda manualmente.
+Cliente: A veces también aparecen cuentas duplicadas en el extracto del banco, ahí hoy no tenemos un procedimiento definido, lo resolvemos a mano.
+Cliente: Una vez conciliado, generamos la planilla de control y se la enviamos por mail al equipo de contabilidad.
+Analista: Perfecto, ¿el ERP es un sistema propio o es SAP?
+Cliente: Es un ERP legado desarrollado internamente, no es SAP.
+Analista: Entendido, ¿cuántas cuentas corrientes se procesan por día en promedio?
+Cliente: Entre 15 y 20 cuentas por día, todas del mismo banco.

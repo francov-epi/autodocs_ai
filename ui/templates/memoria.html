@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Memoria Organizacional — AutoDocs AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Memoria Organizacional</h1>
+  <p>Conocimiento de largo plazo: desvíos de estimación, decisiones de arquitectura, preferencias de estilo y feedback acumulado.</p>
+</div>
+
+<div class="panel mb-4" style="border-left:3px solid var(--cyan)">
+  <p style="font-size:.76rem; color:var(--text-mid); line-height:1.7">
+    Implementación de referencia sobre SQLite con búsqueda por palabras clave (<code>tags</code>).
+    En el stack propuesto por el Trabajo de Medio Ciclo, esta tabla migra a
+    <strong style="color:var(--text-hi)">PostgreSQL + pgvector</strong> y la búsqueda pasa a ser por
+    similitud semántica de embeddings — la interfaz de consulta que usan las Gems no cambia.
+  </p>
+</div>
+
+<div class="panel">
+  <div class="panel-title"><span class="dot"></span>Entradas registradas ({{ entradas|length }})</div>
+  <table>
+    <thead><tr><th>Fecha</th><th>Tipo</th><th>Tags</th><th>Contenido</th><th>Proyecto origen</th></tr></thead>
+    <tbody>
+      {% for e in entradas %}
+      <tr>
+        <td>{{ e.creado[:16] }}</td>
+        <td><span class="tag tag-cyan">{{ e.tipo }}</span></td>
+        <td style="color:var(--text-mid)">{{ e.tags }}</td>
+        <td>{{ e.contenido }}</td>
+        <td>{% if e.proyecto_origen_id %}<a href="/resultado/{{ e.proyecto_origen_id }}" style="color:var(--cyan)">#{{ e.proyecto_origen_id }}</a>{% else %}—{% endif %}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="result-box empty">Todavía no hay entradas en la memoria organizacional.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

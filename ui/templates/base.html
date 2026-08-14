@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}AutoDocs AI{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════
+   DESIGN SYSTEM — QUANT TERMINAL (mismo sistema que Wine AI OS / Financial AI OS)
+═══════════════════════════════════════════════════════ */
+:root {
+  --bg-void:    #04060f;
+  --bg-panel:   #080c1a;
+  --bg-card:    #0c1220;
+  --bg-input:   #101828;
+  --border:     #1a2540;
+  --border-hi:  #243060;
+  --cyan:       #00d4ff;
+  --cyan-dim:   #007da0;
+  --green:      #00e87a;
+  --green-dim:  #006635;
+  --red:        #ff4060;
+  --amber:      #ffaa00;
+  --text-hi:    #e8f0ff;
+  --text-mid:   #7a8eb8;
+  --text-lo:    #3d4f72;
+  --mono:       'JetBrains Mono', monospace;
+  --display:    'Syne', sans-serif;
+  --radius:     10px;
+  --glow-c:     0 0 20px rgba(0,212,255,.18);
+  --glow-g:     0 0 20px rgba(0,232,122,.18);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--mono);
+  background: var(--bg-void);
+  color: var(--text-hi);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-image:
+    repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,.08) 2px, rgba(0,0,0,.08) 4px);
+}
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-void); }
+::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 3px; }
+
+nav {
+  display: flex; align-items: center; gap: 0; padding: 0 24px; height: 52px;
+  background: var(--bg-panel); border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 100; backdrop-filter: blur(10px); overflow-x: auto;
+}
+.nav-logo {
+  font-family: var(--display); font-size: 1rem; font-weight: 800; color: var(--cyan);
+  letter-spacing: -.02em; margin-right: 32px; display: flex; align-items: center; gap: 8px;
+  text-decoration: none; white-space: nowrap;
+}
+.nav-logo::before { content: '📄'; font-size: 1em; animation: pulse-logo 3s ease-in-out infinite; }
+@keyframes pulse-logo { 0%,100% { opacity: 1; } 50% { opacity: .5; } }
+.nav-link {
+  font-family: var(--mono); font-size: .72rem; font-weight: 600; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--text-mid); text-decoration: none; padding: 0 16px;
+  height: 52px; display: flex; align-items: center; border-bottom: 2px solid transparent;
+  transition: color .2s, border-color .2s; white-space: nowrap;
+}
+.nav-link:hover   { color: var(--text-hi); }
+.nav-link.active  { color: var(--cyan); border-bottom-color: var(--cyan); }
+.nav-spacer { flex: 1; }
+.nav-status { display: flex; align-items: center; gap: 6px; font-size: .65rem; color: var(--text-mid); white-space: nowrap; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: blink 2s ease-in-out infinite; }
+.status-dot.off { background: var(--red); animation: none; }
+@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+
+main { flex: 1; padding: 28px 24px; max-width: 1280px; width: 100%; margin: 0 auto; }
+
+.page-header { margin-bottom: 28px; display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.page-header h1 { font-family: var(--display); font-size: 1.6rem; font-weight: 800; color: var(--text-hi); letter-spacing: -.03em; }
+.page-header p { font-size: .72rem; color: var(--text-mid); margin-top: 4px; }
+
+.panel { background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+.panel-title {
+  font-size: .6rem; letter-spacing: .18em; text-transform: uppercase; color: var(--text-lo);
+  margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+}
+.panel-title .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--cyan); }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+.grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
+
+input, select, textarea {
+  width: 100%; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text-hi); font-family: var(--mono); font-size: .8rem; padding: 10px 14px;
+  transition: border-color .2s, box-shadow .2s; outline: none;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--cyan-dim); box-shadow: var(--glow-c); }
+label { display: block; font-size: .6rem; letter-spacing: .12em; text-transform: uppercase; color: var(--text-lo); margin-bottom: 6px; }
+.field { margin-bottom: 16px; }
+select option { background: var(--bg-card); }
+
+.btn {
+  font-family: var(--mono); font-size: .72rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+  border: none; border-radius: var(--radius); padding: 10px 20px; cursor: pointer; transition: all .18s;
+  display: inline-flex; align-items: center; gap: 8px; text-decoration: none;
+}
+.btn-primary { background: var(--cyan); color: #000; }
+.btn-primary:hover { background: #40e0ff; box-shadow: var(--glow-c); }
+.btn-secondary { background: transparent; border: 1px solid var(--border-hi); color: var(--text-mid); }
+.btn-secondary:hover { border-color: var(--cyan-dim); color: var(--text-hi); }
+.btn-green { background: var(--green); color: #000; }
+.btn-green:hover { background: #40ffaa; box-shadow: var(--glow-g); }
+.btn-red { background: var(--red); color: #000; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn-sm { padding: 6px 12px; font-size: .65rem; }
+
+.tag { display: inline-block; font-size: .6rem; letter-spacing: .1em; text-transform: uppercase; padding: 3px 8px; border-radius: 4px; font-weight: 600; }
+.tag-cyan   { background: rgba(0,212,255,.12); color: var(--cyan); border: 1px solid rgba(0,212,255,.2); }
+.tag-green  { background: rgba(0,232,122,.12); color: var(--green); border: 1px solid rgba(0,232,122,.2); }
+.tag-red    { background: rgba(255,64,96,.12); color: var(--red); border: 1px solid rgba(255,64,96,.2); }
+.tag-amber  { background: rgba(255,170,0,.12); color: var(--amber); border: 1px solid rgba(255,170,0,.2); }
+
+.spinner { width: 18px; height: 18px; border: 2px solid var(--border-hi); border-top-color: var(--cyan); border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.result-box {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px;
+  font-size: .78rem; line-height: 1.7; color: var(--text-hi); white-space: pre-wrap; word-break: break-word;
+  min-height: 80px; max-height: 460px; overflow-y: auto;
+}
+.result-box.empty { color: var(--text-lo); font-style: italic; }
+
+table { width: 100%; border-collapse: collapse; font-size: .76rem; }
+th { text-align: left; font-size: .6rem; letter-spacing: .1em; text-transform: uppercase; color: var(--text-lo); padding: 8px 10px; border-bottom: 1px solid var(--border-hi); }
+td { padding: 9px 10px; border-bottom: 1px solid var(--border); color: var(--text-hi); }
+tr:hover td { background: rgba(0,212,255,.03); }
+
+.chip { display: flex; flex-direction: column; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; transition: border-color .2s; }
+.chip:hover { border-color: var(--border-hi); }
+.chip-label { font-size: .6rem; color: var(--text-lo); letter-spacing: .1em; text-transform: uppercase; }
+.chip-value { font-size: 1.1rem; font-weight: 700; color: var(--text-hi); margin: 2px 0; }
+
+.upload-zone {
+  border: 2px dashed var(--border-hi); border-radius: var(--radius); padding: 32px; text-align: center;
+  cursor: pointer; transition: all .2s; color: var(--text-mid); font-size: .78rem;
+}
+.upload-zone:hover, .upload-zone.drag-over { border-color: var(--cyan-dim); background: rgba(0,212,255,.04); color: var(--text-hi); }
+.upload-zone input[type=file] { display: none; }
+
+.kv { display: flex; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--border); }
+.kv:last-child { border-bottom: none; }
+.kv-key { flex: 0 0 180px; font-size: .65rem; color: var(--text-lo); text-transform: uppercase; letter-spacing: .08em; }
+.kv-val { flex: 1; font-size: .78rem; color: var(--text-hi); font-weight: 600; }
+
+/* ─── Gem cards (dashboard de procesamiento) ─── */
+.gem-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+.gem-card .gem-name { font-size: .68rem; font-weight: 700; color: var(--text-hi); margin-bottom: 8px; }
+.gem-status { display: flex; align-items: center; gap: 6px; font-size: .62rem; text-transform: uppercase; letter-spacing: .08em; }
+.gem-status .dot { width: 7px; height: 7px; border-radius: 50%; }
+.dot-ok { background: var(--green); }
+.dot-warn { background: var(--amber); }
+.dot-error { background: var(--red); }
+.dot-info { background: var(--cyan); animation: blink 1.4s infinite; }
+
+/* ─── consola de logs ─── */
+.console {
+  background: #02040a; border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px 16px; font-size: .72rem; line-height: 1.9; max-height: 340px; overflow-y: auto;
+}
+.console .line { display: flex; gap: 10px; }
+.console .ts { color: var(--text-lo); flex-shrink: 0; }
+.console .gem { color: var(--cyan); flex-shrink: 0; font-weight: 700; }
+.console .msg-ok { color: var(--green); }
+.console .msg-warn { color: var(--amber); }
+.console .msg-error { color: var(--red); }
+.console .msg-info { color: var(--text-mid); }
+
+/* ─── tabs de salida ─── */
+.tab-bar { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 20px; overflow-x: auto; }
+.tab-btn {
+  font-family: var(--mono); font-size: .7rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
+  padding: 12px 22px; background: transparent; border: none; border-bottom: 2px solid transparent;
+  color: var(--text-lo); cursor: pointer; transition: all .15s; white-space: nowrap;
+}
+.tab-btn:hover { color: var(--text-mid); }
+.tab-btn.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+.mt-2 { margin-top: 8px; } .mt-4 { margin-top: 16px; } .mb-4 { margin-bottom: 16px; }
+.hidden { display: none !important; }
+.flex { display: flex; } .flex-col { flex-direction: column; }
+.items-center { align-items: center; } .justify-between { justify-content: space-between; }
+.gap-2 { gap: 8px; } .gap-4 { gap: 16px; }
+.text-right { text-align: right; } .wrap { flex-wrap: wrap; }
+
+footer { text-align: center; padding: 16px; font-size: .6rem; color: var(--text-lo); border-top: 1px solid var(--border); letter-spacing: .08em; }
+
+@media (max-width: 768px) {
+  .grid-2, .grid-3, .grid-4, .grid-5 { grid-template-columns: 1fr; }
+  nav { padding: 0 12px; } main { padding: 16px 12px; }
+}
+</style>
+{% block extra_head %}{% endblock %}
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-logo">AutoDocs AI</a>
+  <a href="/"                   class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">Dashboard</a>
+  <a href="/relevamiento/nuevo" class="nav-link {% if request.endpoint == 'nuevo_relevamiento' %}active{% endif %}">Nuevo Relevamiento</a>
+  <a href="/proyectos"          class="nav-link {% if request.endpoint == 'proyectos' %}active{% endif %}">Proyectos</a>
+  <a href="/memoria"            class="nav-link {% if request.endpoint == 'memoria' %}active{% endif %}">Memoria Organizacional</a>
+  <a href="/configuracion"      class="nav-link {% if request.endpoint == 'configuracion' %}active{% endif %}">Configuración</a>
+  <div class="nav-spacer"></div>
+  <div class="nav-status">
+    <div class="status-dot {% if not key_status or not key_status.gemini.ok %}off{% endif %}"></div>
+    <span>GEMINI</span>
+  </div>
+</nav>
+
+<main>
+  {% block content %}{% endblock %}
+</main>
+
+<footer>AUTODOCS AI · Python/Flask · Orquestación cíclica sobre el pool de Gems (Gemini) · UTN-FRBA / Epidata</footer>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

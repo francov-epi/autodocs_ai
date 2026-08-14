@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Nuevo Relevamiento — AutoDocs AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Nuevo Relevamiento</h1>
+  <p>Cargá la transcripción y completá los metadatos del cliente para iniciar el análisis.</p>
+</div>
+
+<div class="grid-2">
+  <div class="panel">
+    <div class="panel-title"><span class="dot"></span>Transcripción del relevamiento</div>
+    <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+      <p>Hacé click o arrastrá un archivo .txt / .docx acá</p>
+      <p style="margin-top:6px; color:var(--text-lo)">También podés pegar el texto directamente abajo.</p>
+      <input type="file" id="file-input" accept=".txt,.md">
+    </div>
+    <p id="file-name" class="mt-2" style="font-size:.72rem; color:var(--text-mid)"></p>
+    <div class="field mt-4">
+      <label>Texto de la transcripción</label>
+      <textarea id="transcripcion" rows="10" placeholder="Pegá acá la transcripción cruda de la reunión de relevamiento..."></textarea>
+    </div>
+    <p style="font-size:.68rem; color:var(--text-lo)">
+      El sistema validará duración mínima estimada y presencia de verbos operativos antes de procesar
+      (Límite Operativo de Entrada). Los datos sensibles se sanitizan automáticamente antes de llegar a las Gems.
+    </p>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title"><span class="dot"></span>Metadatos del proyecto</div>
+    <div class="field">
+      <label>Cliente</label>
+      <input type="text" id="cliente" placeholder="ej. Cementos Pacasmayo">
+    </div>
+    <div class="field">
+      <label>Proceso a relevar</label>
+      <input type="text" id="proceso" placeholder="ej. Conciliación de Saldos">
+    </div>
+    <div class="grid-2">
+      <div class="field">
+        <label>Tecnología objetivo</label>
+        <select id="tecnologia">
+          <option value="UiPath">UiPath</option>
+          <option value="Power Automate">Power Automate</option>
+          <option value="Rocketbot">Rocketbot</option>
+          <option value="Make.com">Make.com</option>
+          <option value="Otra">Otra</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Criticidad</label>
+        <select id="criticidad">
+          <option value="Media">Media</option>
+          <option value="Alta">Alta</option>
+          <option value="Baja">Baja</option>
+        </select>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="field">
+        <label>Presupuesto estimado (hs, opcional)</label>
+        <input type="number" id="presupuesto_hs" step="0.5" min="0">
+      </div>
+      <div class="field">
+        <label>Analista</label>
+        <input type="text" id="analista" placeholder="Tu nombre">
+      </div>
+    </div>
+    <button class="btn btn-primary" id="btn-iniciar" onclick="iniciarAnalisis()">Iniciar Análisis →</button>
+    <span class="spinner hidden" id="spinner"></span>
+    <p id="error-box" class="mt-4 hidden" style="font-size:.74rem; color:var(--red)"></p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const input = document.getElementById('file-input');
+const zone = document.getElementById('upload-zone');
+const fname = document.getElementById('file-name');
+const textarea = document.getElementById('transcripcion');
+
+function leerArchivo(file) {
+  fname.textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = (e) => { textarea.value = e.target.result; };
+  reader.readAsText(file);
+}
+input.addEventListener('change', () => { if (input.files.length) leerArchivo(input.files[0]); });
+zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('drag-over'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+zone.addEventListener('drop', (e) => {
+  e.preventDefault(); zone.classList.remove('drag-over');
+  if (e.dataTransfer.files.length) leerArchivo(e.dataTransfer.files[0]);
+});
+
+async function iniciarAnalisis() {
+  const cliente = document.getElementById('cliente').value.trim();
+  const proceso = document.getElementById('proceso').value.trim();
+  const errorBox = document.getElementById('error-box');
+  errorBox.classList.add('hidden');
+
+  if (!cliente || !proceso || !textarea.value.trim()) {
+    errorBox.textContent = 'Completá cliente, proceso y la transcripción antes de continuar.';
+    errorBox.classList.remove('hidden');
+    return;
+  }
+
+  const btn = document.getElementById('btn-iniciar');
+  const spinner = document.getElementById('spinner');
+  btn.disabled = true; spinner.classList.remove('hidden');
+
+  const payload = {
+    cliente, proceso,
+    tecnologia: document.getElementById('tecnologia').value,
+    criticidad: document.getElementById('criticidad').value,
+    presupuesto_hs: document.getElementById('presupuesto_hs').value,
+    analista: document.getElementById('analista').value.trim(),
+    transcripcion: textarea.value,
+  };
+
+  try {
+    const r = await fetch('/relevamiento/nuevo', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    window.location.href = `/procesamiento/${data.id}?autostart=1`;
+  } catch (e) {
+    errorBox.textContent = 'Error: ' + e.message;
+    errorBox.classList.remove('hidden');
+    btn.disabled = false; spinner.classList.add('hidden');
+  }
+}
+</script>
+{% endblock %}

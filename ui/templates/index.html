@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — AutoDocs AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Dashboard</h1>
+  <p>Automatización inteligente de documentación de preventa y relevamiento técnico.</p>
+</div>
+
+{% if not key_status.gemini.ok %}
+<div class="panel mb-4" style="border-left:3px solid var(--amber)">
+  <div class="panel-title"><span class="dot"></span>Conexión con Gemini pendiente</div>
+  <p style="font-size:.78rem; color:var(--text-mid); line-height:1.6">
+    Todavía no hay una API key de Gemini disponible en la variable de entorno configurada
+    (<code>{{ key_status.gemini.env_var }}</code>). El pipeline puede crear proyectos igual,
+    pero las Gems no van a poder responder hasta que la configures en
+    <a href="/configuracion" style="color:var(--cyan)">Configuración</a>.
+  </p>
+</div>
+{% endif %}
+
+<div class="grid-4 mb-4">
+  <div class="chip">
+    <span class="chip-label">Proyectos totales</span>
+    <span class="chip-value">{{ stats.total_proyectos }}</span>
+  </div>
+  <div class="chip">
+    <span class="chip-label">Completados</span>
+    <span class="chip-value">{{ stats.completados }}</span>
+  </div>
+  <div class="chip">
+    <span class="chip-label">Horas estimadas (acum.)</span>
+    <span class="chip-value">{{ stats.horas_estimadas }}</span>
+  </div>
+  <div class="chip">
+    <span class="chip-label">Alertas abiertas</span>
+    <span class="chip-value" style="{% if stats.alertas_abiertas %}color:var(--amber){% endif %}">{{ stats.alertas_abiertas }}</span>
+  </div>
+</div>
+
+<div class="grid-2 mb-4">
+  <div class="panel">
+    <div class="panel-title"><span class="dot"></span>Relevamientos recientes</div>
+    {% if stats.recientes %}
+      {% for p in stats.recientes %}
+      <div class="kv">
+        <div class="kv-key">{{ p.creado[:16] }}</div>
+        <div class="kv-val">
+          <a href="{% if p.estado == 'completado' %}/resultado/{{ p.id }}{% else %}/procesamiento/{{ p.id }}{% endif %}" style="color:var(--text-hi); text-decoration:none">
+            {{ p.cliente }} — {{ p.proceso }}
+          </a>
+          {% if p.estado == 'completado' %}<span class="tag tag-green mt-2">Completado</span>
+          {% elif p.estado == 'frenado' %}<span class="tag tag-red mt-2">Frenado</span>
+          {% elif p.estado == 'procesando' %}<span class="tag tag-amber mt-2">Procesando</span>
+          {% else %}<span class="tag tag-cyan mt-2">Borrador</span>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <p class="result-box empty">Todavía no cargaste ningún relevamiento. Empezá por "Nuevo Relevamiento".</p>
+    {% endif %}
+  </div>
+
+  <div class="panel">
+    <div class="panel-title"><span class="dot"></span>Ciclo de orquestación</div>
+    <p style="font-size:.76rem; color:var(--text-mid); line-height:1.9">
+      Observación <span style="color:var(--text-lo)">→</span>
+      Análisis <span style="color:var(--text-lo)">→</span>
+      Planificación <span style="color:var(--text-lo)">→</span>
+      Acción <span style="color:var(--text-lo)">→</span>
+      Evaluación <span style="color:var(--text-lo)">→</span>
+      Aprendizaje <span style="color:var(--text-lo)">→</span> nueva observación.
+    </p>
+    <p class="mt-4" style="font-size:.72rem; color:var(--text-lo)">
+      Cada corrección manual que registrás en un proyecto (botón "Registrar feedback" en
+      Resultados) queda en la Memoria Organizacional y ajusta el contexto de las Gems en
+      los próximos relevamientos.
+    </p>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-title"><span class="dot"></span>Accesos rápidos</div>
+  <div class="flex gap-4 wrap">
+    <a href="/relevamiento/nuevo" class="btn btn-primary">Cargar nuevo relevamiento</a>
+    <a href="/proyectos" class="btn btn-secondary">Ver todos los proyectos</a>
+    <a href="/memoria" class="btn btn-secondary">Explorar memoria organizacional</a>
+    <a href="/configuracion" class="btn btn-secondary">Configurar Gems y proveedor</a>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Proyectos — AutoDocs AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Proyectos</h1>
+  <p>Historial completo de relevamientos procesados por AutoDocs AI.</p>
+</div>
+
+<div class="panel">
+  <table>
+    <thead><tr><th>Fecha</th><th>Cliente</th><th>Proceso</th><th>Tecnología</th><th>Estado</th><th></th></tr></thead>
+    <tbody>
+      {% for p in proyectos %}
+      <tr>
+        <td>{{ p.creado[:16] }}</td>
+        <td>{{ p.cliente }}</td>
+        <td>{{ p.proceso }}</td>
+        <td>{{ p.tecnologia or '—' }}</td>
+        <td>
+          {% if p.estado == 'completado' %}<span class="tag tag-green">Completado</span>
+          {% elif p.estado == 'frenado' %}<span class="tag tag-red">Frenado</span>
+          {% elif p.estado == 'procesando' %}<span class="tag tag-amber">Procesando</span>
+          {% else %}<span class="tag tag-cyan">Borrador</span>{% endif %}
+        </td>
+        <td class="text-right">
+          {% if p.estado == 'completado' %}
+            <a href="/resultado/{{ p.id }}" class="btn btn-secondary btn-sm">Ver resultado</a>
+          {% else %}
+            <a href="/procesamiento/{{ p.id }}" class="btn btn-secondary btn-sm">Ver procesamiento</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="result-box empty">Todavía no cargaste ningún relevamiento.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Resultado — AutoDocs AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>{{ proyecto.cliente }} — {{ proyecto.proceso }}</h1>
+  <p>
+    {% if alertas %}
+      <span class="tag tag-amber">{{ alertas|length }} alerta(s) del Supervisor</span>
+    {% else %}
+      <span class="tag tag-green">Sin alertas de consistencia</span>
+    {% endif %}
+    &nbsp;·&nbsp;
+    <a href="/export/{{ proyecto.id }}/paquete" class="btn btn-secondary btn-sm">Exportar paquete completo (.zip)</a>
+  </p>
+</div>
+
+<div class="grid-2" style="grid-template-columns: 1fr 320px; gap:18px;">
+  <div class="panel">
+    <div class="tab-bar" id="tab-bar">
+      {% for t in tipos %}
+      <button class="tab-btn {% if loop.first %}active{% endif %}" onclick="mostrarTab('{{ t }}')">{{ t }}</button>
+      {% endfor %}
+    </div>
+
+    {% for t in tipos %}
+    <div class="tab-panel {% if loop.first %}active{% endif %}" id="panel-{{ t }}">
+      {% if t in ['ESTIMACION', 'PDD'] %}
+        {% set resumen = resumen_estimacion if t == 'ESTIMACION' else resumen_pdd %}
+        <div class="result-box {% if not documentos.get(t) %}empty{% endif %}" id="resumen-{{ t }}">{{ resumen or 'Esta Gem todavía no generó contenido para este proyecto.' }}</div>
+        <div class="result-box hidden" id="contenido-{{ t }}" style="margin-top:8px; font-size:.68rem; color:var(--text-mid)">{{ documentos.get(t, {}).get('contenido', '') }}</div>
+        <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="toggleJson('{{ t }}')">Ver/ocultar JSON crudo</button>
+      {% else %}
+        <div class="result-box {% if not documentos.get(t) %}empty{% endif %}" id="contenido-{{ t }}">{{ documentos.get(t, {}).get('contenido', 'Esta Gem todavía no generó contenido para este proyecto.') }}</div>
+      {% endif %}
+
+      <div class="flex gap-2 mt-4 wrap">
+        <a href="/export/{{ proyecto.id }}/{{ t }}" class="btn btn-secondary btn-sm">
+          Exportar {{ t }} ({% if t in ['PDD','SDD'] %}.docx{% else %}.xlsx{% endif %})
+        </a>
+      </div>
+
+      <div class="field mt-4">
+        <label>Editar con el agente responsable</label>
+        <div class="flex gap-2">
+          <input type="text" id="editar-{{ t }}" placeholder="ej. 'Gem {{ t }}, agregá la excepción de cuentas duplicadas...'">
+          <button class="btn btn-primary btn-sm" onclick="editarDocumento('{{ t }}')">Enviar</button>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="flex flex-col gap-4">
+    <div class="panel">
+      <div class="panel-title"><span class="dot"></span>Alertas del Supervisor</div>
+      {% if alertas %}
+        {% for a in alertas %}
+        <div class="kv"><div class="kv-val" style="color:var(--amber)">{{ a.mensaje }}</div></div>
+        {% endfor %}
+      {% else %}
+        <p class="result-box empty">Sin observaciones de consistencia entre PDD, SDD, QA y Estimación.</p>
+      {% endif %}
+    </div>
+
+    <div class="panel">
+      <div class="panel-title"><span class="dot"></span>Registrar feedback (Aprendizaje continuo)</div>
+      <p style="font-size:.7rem; color:var(--text-mid); margin-bottom:10px;">
+        Si corregiste algo a mano, contalo acá — queda en la memoria organizacional para
+        que futuros relevamientos lo hereden.
+      </p>
+      <div class="field">
+        <label>Tags (separados por coma)</label>
+        <input type="text" id="feedback-tags" placeholder="ej. sap, legado">
+      </div>
+      <div class="field">
+        <label>Criterio / corrección</label>
+        <textarea id="feedback-texto" rows="3" placeholder="ej. Las integraciones con SAP necesitan +20% de horas"></textarea>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="registrarFeedback()">Guardar en memoria</button>
+      <p id="feedback-ok" class="mt-2 hidden" style="font-size:.7rem; color:var(--green)">Guardado ✓</p>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title"><span class="dot"></span>Datos del proyecto</div>
+      <div class="kv"><div class="kv-key">Tecnología</div><div class="kv-val">{{ proyecto.tecnologia or '—' }}</div></div>
+      <div class="kv"><div class="kv-key">Criticidad</div><div class="kv-val">{{ proyecto.criticidad or '—' }}</div></div>
+      <div class="kv"><div class="kv-key">Reemplazos PII</div><div class="kv-val">{{ proyecto.reemplazos_pii }}</div></div>
+      <div class="kv"><div class="kv-key">Estado</div><div class="kv-val">{{ proyecto.estado }}</div></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const proyectoId = {{ proyecto.id }};
+
+function mostrarTab(tipo) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('panel-' + tipo).classList.add('active');
+}
+
+function toggleJson(tipo) {
+  document.getElementById('contenido-' + tipo).classList.toggle('hidden');
+}
+
+async function editarDocumento(tipo) {
+  const input = document.getElementById('editar-' + tipo);
+  const instruccion = input.value.trim();
+  if (!instruccion) return;
+  const box = document.getElementById('contenido-' + tipo);
+  const resumenBox = ['ESTIMACION', 'PDD'].includes(tipo) ? document.getElementById('resumen-' + tipo) : null;
+  const anterior = box.textContent;
+  const anteriorResumen = resumenBox ? resumenBox.textContent : null;
+  (resumenBox || box).textContent = 'Aplicando edición con la Gem correspondiente...';
+  box.classList.remove('empty');
+
+  try {
+    const r = await fetch(`/api/proyecto/${proyectoId}/editar`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({tipo, instruccion}),
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    box.textContent = data.contenido;
+    if (resumenBox && data.resumen) resumenBox.textContent = data.resumen;
+    input.value = '';
+  } catch (e) {
+    box.textContent = anterior;
+    if (resumenBox) resumenBox.textContent = anteriorResumen;
+    alert('Error al editar: ' + e.message);
+  }
+}
+
+async function registrarFeedback() {
+  const tags = document.getElementById('feedback-tags').value;
+  const contenido = document.getElementById('feedback-texto').value.trim();
+  if (!contenido) return;
+  const r = await fetch(`/api/proyecto/${proyectoId}/feedback`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({tags, contenido}),
+  });
+  const data = await r.json();
+  if (data.ok) {
+    document.getElementById('feedback-ok').classList.remove('hidden');
+    document.getElementById('feedback-texto').value = '';
+    setTimeout(() => document.getElementById('feedback-ok').classList.add('hidden'), 2500);
+  }
+}
+</script>
+{% endblock %}

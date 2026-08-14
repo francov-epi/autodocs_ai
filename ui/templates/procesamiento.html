@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Procesamiento — AutoDocs AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Panel de Procesamiento Agéntico</h1>
+  <p>{{ proyecto.cliente }} — {{ proyecto.proceso }} · avance del pool de Gems sobre la transcripción cargada.</p>
+</div>
+
+<div class="grid-5 mb-4" id="gem-cards">
+  <div class="gem-card"><div class="gem-name">Ingesta</div><div class="gem-status" data-gem="Ingesta"><span class="dot dot-info"></span><span>En espera</span></div></div>
+  <div class="gem-card"><div class="gem-name">Gem PDD</div><div class="gem-status" data-gem="Gem PDD — Analista Funcional"><span class="dot dot-info"></span><span>En espera</span></div></div>
+  <div class="gem-card"><div class="gem-name">Gem SDD</div><div class="gem-status" data-gem="Gem SDD — Arquitecto de Solución"><span class="dot dot-info"></span><span>En espera</span></div></div>
+  <div class="gem-card"><div class="gem-name">Gem QA</div><div class="gem-status" data-gem="Gem QA — Control de Calidad"><span class="dot dot-info"></span><span>En espera</span></div></div>
+  <div class="gem-card"><div class="gem-name">Estimación</div><div class="gem-status" data-gem="Gem Estimación — Estimador Comercial"><span class="dot dot-info"></span><span>En espera</span></div></div>
+</div>
+
+<div class="panel mb-4" id="freno-panel" style="display:none; border-left:3px solid var(--red)">
+  <div class="panel-title"><span class="dot"></span>Proceso frenado — Límite Operativo de Entrada</div>
+  <p id="freno-motivo" style="font-size:.8rem; color:var(--text-hi)"></p>
+  <a href="/relevamiento/nuevo" class="btn btn-secondary mt-4">Volver a cargar con más contexto</a>
+</div>
+
+<div class="panel">
+  <div class="panel-title">
+    <span class="dot"></span>Log de comunicación agéntica
+    <span class="nav-spacer"></span>
+    <span id="estado-badge" class="tag tag-cyan">Iniciando…</span>
+  </div>
+  <div class="console" id="console">
+    <div class="line"><span class="msg-info">Esperando inicio del ciclo…</span></div>
+  </div>
+</div>
+
+<div class="flex gap-4 mt-4" id="acciones" style="display:none">
+  <a href="/resultado/{{ proyecto.id }}" class="btn btn-primary">Ver resultados →</a>
+  <a href="/proyectos" class="btn btn-secondary">Volver a Proyectos</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const proyectoId = {{ proyecto.id }};
+const autostart = {{ 'true' if autostart else 'false' }};
+let polling = null;
+
+const NIVEL_DOT = {info: 'dot-info', ok: 'dot-ok', warn: 'dot-warn', error: 'dot-error'};
+const NIVEL_MSG = {info: 'msg-info', ok: 'msg-ok', warn: 'msg-warn', error: 'msg-error'};
+
+function pintarLogs(logs) {
+  const cons = document.getElementById('console');
+  cons.innerHTML = logs.map(l => `
+    <div class="line">
+      <span class="ts">[${l.creado.slice(11,19)}]</span>
+      <span class="gem">${l.gem}</span>
+      <span class="${NIVEL_MSG[l.nivel] || 'msg-info'}">${l.mensaje}</span>
+    </div>`).join('') || '<div class="line"><span class="msg-info">Sin actividad todavía…</span></div>';
+  cons.scrollTop = cons.scrollHeight;
+
+  // actualizar gem-cards con el último estado conocido de cada una
+  document.querySelectorAll('.gem-status').forEach(el => {
+    const gemName = el.dataset.gem;
+    const ultimos = logs.filter(l => l.gem === gemName);
+    if (!ultimos.length) return;
+    const last = ultimos[ultimos.length - 1];
+    const dot = el.querySelector('.dot');
+    const label = el.querySelector('span:last-child');
+    dot.className = 'dot ' + (NIVEL_DOT[last.nivel] || 'dot-info');
+    label.textContent = last.nivel === 'ok' ? 'Completado' : (last.nivel === 'error' ? 'Error' : last.mensaje.slice(0, 24));
+  });
+}
+
+async function refrescarEstado() {
+  const r = await fetch(`/api/proyecto/${proyectoId}/estado`);
+  const data = await r.json();
+  pintarLogs(data.logs);
+
+  const badge = document.getElementById('estado-badge');
+  if (data.estado === 'completado') {
+    badge.textContent = 'Completado'; badge.className = 'tag tag-green';
+    document.getElementById('acciones').style.display = 'flex';
+    clearInterval(polling);
+  } else if (data.estado === 'frenado') {
+    badge.textContent = 'Frenado'; badge.className = 'tag tag-red';
+    document.getElementById('freno-panel').style.display = 'block';
+    document.getElementById('freno-motivo').textContent = data.motivo_freno || '';
+    clearInterval(polling);
+  } else if (data.estado === 'procesando') {
+    badge.textContent = 'Procesando…'; badge.className = 'tag tag-amber';
+  } else {
+    badge.textContent = 'Borrador'; badge.className = 'tag tag-cyan';
+  }
+}
+
+async function iniciar() {
+  document.getElementById('estado-badge').textContent = 'Procesando…';
+  document.getElementById('estado-badge').className = 'tag tag-amber';
+  polling = setInterval(refrescarEstado, 1200);
+  await fetch(`/api/proyecto/${proyectoId}/iniciar`, {method: 'POST'});
+  await refrescarEstado();
+}
+
+refrescarEstado();
+if (autostart) { iniciar(); } else { polling = setInterval(refrescarEstado, 2000); }
+</script>
+{% endblock %}

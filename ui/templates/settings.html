@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Configuración — AutoDocs AI{% endblock %}
+
+{% block extra_head %}
+<style>
+.env-instruction { background: var(--bg-card); border: 1px solid var(--border-hi); border-left: 3px solid var(--amber); border-radius: 10px; padding: 16px 18px; font-size: .72rem; color: var(--text-mid); line-height: 1.8; margin-bottom: 24px; }
+.env-instruction code { font-family: var(--mono); background: var(--bg-input); color: var(--cyan); padding: 1px 6px; border-radius: 3px; font-size: .7rem; }
+.key-badge { display:flex; align-items:center; gap:8px; padding:10px 14px; border-radius:8px; font-size:.72rem; font-weight:600; margin-bottom:16px; }
+.key-badge.ok { background:rgba(0,232,122,.08); border:1px solid rgba(0,232,122,.25); color:var(--green); }
+.key-badge.missing { background:rgba(255,64,96,.08); border:1px solid rgba(255,64,96,.25); color:var(--red); }
+.gem-config { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 14px; }
+.gem-config h4 { font-family: var(--display); font-size: .88rem; margin-bottom: 10px; }
+.gem-config textarea { font-size: .72rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Configuración</h1>
+  <p>Proveedor de IA · modelos y conexión de cada Gem · reglas del Límite Operativo de Entrada</p>
+</div>
+
+<div class="env-instruction">
+  <strong style="color:var(--amber)">&#9888; La API key va en una variable de entorno — nunca en archivos del repo</strong><br>
+  Configurá el <strong>nombre</strong> de la variable donde guardaste tu key de Gemini (por defecto <code>GOOGLE_API_KEY</code>).<br><br>
+  <code>setx GOOGLE_API_KEY "AIza..." /M</code> (Windows) — reiniciá la terminal y el servidor después.
+</div>
+
+<div class="key-badge {{ 'ok' if key_status.gemini.ok else 'missing' }}">
+  {{ '✓ Gemini conectado' if key_status.gemini.ok else '✕ Gemini sin API key' }} — var: {{ key_status.gemini.env_var }}
+  <button type="button" class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="probarConexion()">Probar conexión</button>
+  <button type="button" class="btn btn-secondary btn-sm" onclick="listarModelos()">Ver modelos disponibles hoy</button>
+</div>
+<p id="test-result" class="hidden result-box"></p>
+
+<form method="POST">
+
+<div class="panel mb-4">
+  <div class="panel-title"><span class="dot"></span>Proveedor</div>
+  <div class="grid-2">
+    <div class="field">
+      <label>Variable de entorno (API key)</label>
+      <input type="text" name="gemini_env_name" value="{{ cfg.providers.gemini.env_key_name }}">
+    </div>
+    <div class="field">
+      <label>Modelo por defecto</label>
+      <select name="gemini_model">
+        {% for m in gemini_models %}
+        <option value="{{ m.id }}" {% if cfg.providers.gemini.model == m.id %}selected{% endif %}>{{ m.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+</div>
+
+<div class="panel mb-4">
+  <div class="panel-title"><span class="dot"></span>Límite Operativo de Entrada</div>
+  <div class="field" style="max-width:280px">
+    <label>Duración mínima estimada (minutos)</label>
+    <input type="number" name="duracion_min_minutos" value="{{ cfg.reglas.duracion_min_minutos }}" min="1">
+  </div>
+</div>
+
+<div class="panel mb-4">
+  <div class="panel-title"><span class="dot"></span>Pool de Gems — conexión</div>
+  <p style="font-size:.72rem; color:var(--text-mid); margin-bottom:14px; line-height:1.7">
+    Acá se define <strong style="color:var(--text-hi)">solo la conexión</strong> con cada Gem: qué modelo
+    de Gemini usa y qué <code>system_instruction</code> recibe. El razonamiento real de cada Gem se diseña
+    y mantiene en Gemini — pegá ese prompt en el campo correspondiente cuando esté listo.
+  </p>
+
+  {% for key, nombre in [('ingesta','Agente de Ingesta y Estructuración'), ('pdd','Gem PDD — Analista Funcional'),
+                          ('sdd','Gem SDD — Arquitecto de Solución'), ('qa','Gem QA — Control de Calidad'),
+                          ('estimacion','Gem Estimación — Estimador Comercial'),
+                          ('supervisor','Agente Supervisor y Consolidador')] %}
+  <div class="gem-config">
+    <h4>{{ nombre }}</h4>
+    <div class="grid-2">
+      <div class="field">
+        <label>Modelo</label>
+        <select name="{{ key }}_model">
+          {% for m in gemini_models %}
+          <option value="{{ m.id }}" {% if cfg.gems[key].model == m.id %}selected{% endif %}>{{ m.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label>System instruction (prompt del Gem)</label>
+      <textarea name="{{ key }}_instruction" rows="4">{{ cfg.gems[key].system_instruction }}</textarea>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<button type="submit" class="btn btn-primary">Guardar configuración</button>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function probarConexion() {
+  const box = document.getElementById('test-result');
+  box.classList.remove('hidden', 'empty');
+  box.textContent = 'Probando…';
+  try {
+    const r = await fetch('/api/test-gemini');
+    const data = await r.json();
+    box.textContent = (data.ok ? '✓ ' : '✕ ') + data.message;
+  } catch (e) {
+    box.textContent = 'Error: ' + e.message;
+  }
+}
+
+async function listarModelos() {
+  const box = document.getElementById('test-result');
+  box.classList.remove('hidden', 'empty');
+  box.textContent = 'Consultando ListModels…';
+  try {
+    const r = await fetch('/api/gemini/modelos');
+    const data = await r.json();
+    box.textContent = data.ok
+      ? 'Modelos habilitados para tu API key:\n' + data.models.join('\n')
+      : 'Error: ' + data.message;
+  } catch (e) {
+    box.textContent = 'Error: ' + e.message;
+  }
+}
+</script>
+{% endblock %}
