@@ -13,11 +13,14 @@ from datetime import datetime
 
 from docx import Document
 from docx.shared import Pt, RGBColor
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
 from services.estimacion_service import EstimacionService, FASES_ESPERADAS
+from services.pdd_service import PddService
 
 # Paleta tomada del template histórico de Estimación (Google Sheets → Excel)
 _HEADER_FILL = PatternFill(start_color="C9DAF8", end_color="C9DAF8", fill_type="solid")
@@ -26,6 +29,35 @@ _TOTAL_FONT = Font(bold=True, color="FFFFFF")
 _HEADER_FONT = Font(bold=True, color="000000")
 _THIN = Side(style="thin", color="D0D0D0")
 _BORDER = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
+
+# Mismo celeste corporativo que las tablas del template PDD (SAMAN)
+_DOCX_HEADER_SHADE = "C9DAF8"
+
+
+def _shade_cell(cell, hex_color: str) -> None:
+    shd = OxmlElement("w:shd")
+    shd.set(qn("w:fill"), hex_color)
+    cell._tc.get_or_add_tcPr().append(shd)
+
+
+def _tabla_docx(doc, headers: list, filas: list) -> None:
+    """Crea una tabla estilo 'Table Grid' con encabezado celeste, igual que
+    las tablas del template PDD corporativo. `filas` es una lista de listas
+    de strings, en el mismo orden que `headers`."""
+    tabla = doc.add_table(rows=1, cols=len(headers))
+    tabla.style = "Table Grid"
+    for i, h in enumerate(headers):
+        cell = tabla.rows[0].cells[i]
+        cell.text = h
+        _shade_cell(cell, _DOCX_HEADER_SHADE)
+        for p in cell.paragraphs:
+            for run in p.runs:
+                run.font.bold = True
+    for fila in filas:
+        row_cells = tabla.add_row().cells
+        for i, val in enumerate(fila):
+            row_cells[i].text = "" if val in (None, "") else str(val)
+    doc.add_paragraph("")
 
 
 def _docx_desde_texto(titulo: str, subtitulo: str, cuerpo: str) -> io.BytesIO:
@@ -56,6 +88,140 @@ def _docx_desde_texto(titulo: str, subtitulo: str, cuerpo: str) -> io.BytesIO:
             doc.add_paragraph(linea[2:], style="List Bullet")
         else:
             doc.add_paragraph(linea)
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf
+
+
+def _pdd_a_docx_estructurado(proyecto: dict, data: dict) -> io.BytesIO:
+    """Arma el PDD replicando las secciones del template corporativo
+    (SAMAN-style): Introducción, Descripción AS IS (tabla general +
+    aplicaciones + camino feliz), Descripción TO BE (alcance, excepciones
+    de negocio, errores de aplicación, reportes)."""
+    doc = Document()
+    nombre_proceso = data.get("nombre_proceso") or proyecto.get("proceso", "")
+
+    h = doc.add_heading("Process Definition Document", level=0)
+    for run in h.runs:
+        run.font.color.rgb = RGBColor(0x1A, 0x2A, 0x5C)
+    doc.add_heading(f"{proyecto.get('cliente','')} — {nombre_proceso}", level=1)
+    doc.add_paragraph(f"Generado por AutoDocs AI — {datetime.now():%d/%m/%Y %H:%M}").italic = True
+    doc.add_paragraph("")
+
+    # ── 1. INTRODUCCIÓN ─────────────────────────────────────────────
+    doc.add_heading("1. Introducción", level=1)
+    doc.add_heading("1.1 Propósito", level=2)
+    doc.add_paragraph(
+        "El presente documento de definición de procesos (PDD) describe el proceso de "
+        "negocio elegido para la automatización, la secuencia de acciones AS IS y la "
+        "propuesta TO BE resultante de la preparación para la automatización."
+    )
+    doc.add_heading("1.2 Objetivos", level=2)
+    doc.add_paragraph(data.get("objetivos") or "—")
+
+    # ── 2. DESCRIPCIÓN DEL PROCESO AS IS ────────────────────────────
+    doc.add_heading("2. Descripción del proceso AS IS", level=1)
+    doc.add_heading("2.1 Descripción general del proceso", level=2)
+    campos_generales = [
+        ("Nombre del Proceso", data.get("nombre_proceso")),
+        ("Área del Proceso", data.get("area_proceso")),
+        ("Área", data.get("area")),
+        ("Descripción breve", data.get("descripcion_breve")),
+        ("Roles/aplicaciones requeridos", data.get("roles_aplicaciones")),
+        ("Horario y frecuencia del proceso", data.get("horario_frecuencia")),
+        ("# de veces de ejecución", data.get("veces_ejecucion")),
+        ("Tiempo de ejecución del proceso", data.get("tiempo_ejecucion")),
+        ("Restricciones del proceso", data.get("restricciones")),
+        ("Periodo(s) pico", data.get("periodo_pico")),
+        ("Volumen máximo de periodo pico", data.get("volumen_pico")),
+        ("# de personas que realizan el proceso", data.get("personas_proceso")),
+        ("Descripción de los datos de entrada", data.get("datos_entrada")),
+        ("Descripción de los datos de salida", data.get("datos_salida")),
+    ]
+    _tabla_docx(doc, ["Item", "Descripción / Respuesta"], campos_generales)
+
+    doc.add_heading("2.2 Aplicaciones usadas", level=2)
+    apps = data.get("aplicaciones") or []
+    _tabla_docx(
+        doc,
+        ["Nombre de aplicación", "Versión", "Idioma", "Environment/Access", "Comentario"],
+        [[a.get("nombre"), a.get("version"), a.get("idioma"), a.get("acceso"), a.get("comentario")]
+         for a in apps if isinstance(a, dict)] or [["—", "", "", "", ""]],
+    )
+
+    doc.add_heading("2.3 Mapa de procesos a nivel detallado — Camino Feliz", level=2)
+    pasos = data.get("camino_feliz") or []
+    _tabla_docx(
+        doc,
+        ["#", "Descripción", "Resultado esperado", "Regla de Negocio", "Comentarios"],
+        [[p.get("numero"), p.get("descripcion"), p.get("resultado_esperado"),
+          p.get("regla_negocio"), p.get("comentarios")]
+         for p in pasos if isinstance(p, dict)] or [["—", "", "", "", ""]],
+    )
+
+    # ── 3. DESCRIPCIÓN DEL PROCESO TO BE ────────────────────────────
+    doc.add_heading("3. Descripción del proceso TO BE", level=1)
+
+    doc.add_heading("3.1 Dentro del alcance de RPA", level=2)
+    dentro = data.get("dentro_alcance") or []
+    if dentro:
+        for item in dentro:
+            doc.add_paragraph(str(item), style="List Bullet")
+    else:
+        doc.add_paragraph("—")
+
+    doc.add_heading("3.2 Fuera del alcance de RPA", level=2)
+    fuera = data.get("fuera_alcance") or []
+    _tabla_docx(
+        doc, ["Actividad / Acción", "Motivo fuera de alcance"],
+        [[f.get("actividad"), f.get("motivo")] for f in fuera if isinstance(f, dict)] or [["Ninguna", ""]],
+    )
+
+    doc.add_heading("3.3 Manejo de Excepciones", level=2)
+    doc.add_heading("3.3.1 Excepciones del Negocio conocidas", level=3)
+    exc_neg = data.get("excepciones_negocio_conocidas") or []
+    _tabla_docx(
+        doc, ["Nombre de la excepción", "Acción", "Parámetros", "Acción a realizar"],
+        [[e.get("nombre"), e.get("accion"), e.get("parametros"), e.get("accion_a_realizar")]
+         for e in exc_neg if isinstance(e, dict)] or [["—", "", "", ""]],
+    )
+    doc.add_heading("3.3.2 Excepciones de negocio no conocidas", level=3)
+    doc.add_paragraph(data.get("excepciones_negocio_desconocidas") or
+                       "Capturar pantalla y notificar por correo; el robot continúa con la siguiente transacción.")
+
+    doc.add_heading("3.4 Manejo de excepciones y errores de aplicaciones", level=2)
+    doc.add_heading("3.4.1 Errores y Excepciones Conocidas de las Aplicaciones", level=3)
+    err_sis = data.get("errores_sistema_conocidos") or []
+    _tabla_docx(
+        doc, ["Nombre de Excepción/Error", "Acción", "Parámetros", "Acción a ejecutar"],
+        [[e.get("nombre"), e.get("accion"), e.get("parametros"), e.get("accion_a_ejecutar")]
+         for e in err_sis if isinstance(e, dict)] or [["—", "", "", ""]],
+    )
+    doc.add_heading("3.4.2 Errores y Excepciones Desconocidas de las Aplicaciones", level=3)
+    doc.add_paragraph(data.get("errores_sistema_desconocidos") or
+                       "Reintentar acceso a la aplicación 3 veces y luego finalizar el subproceso.")
+
+    doc.add_heading("3.5 Reportes", level=2)
+    reportes = data.get("reportes") or []
+    _tabla_docx(
+        doc, ["Tipo de reporte", "Frecuencia de actualización", "Detalle"],
+        [[r.get("tipo"), r.get("frecuencia"), r.get("detalle")] for r in reportes if isinstance(r, dict)]
+        or [["Logs del proceso", "Diario", ""]],
+    )
+
+    # ── notas del análisis automatizado (transparencia) ─────────────
+    if data.get("supuestos") or data.get("preguntas_abiertas"):
+        doc.add_heading("4. Notas del análisis automatizado", level=1)
+        if data.get("supuestos"):
+            doc.add_heading("4.1 Supuestos", level=2)
+            for s in data["supuestos"]:
+                doc.add_paragraph(str(s), style="List Bullet")
+        if data.get("preguntas_abiertas"):
+            doc.add_heading("4.2 Preguntas abiertas para el cliente", level=2)
+            for s in data["preguntas_abiertas"]:
+                doc.add_paragraph(str(s), style="List Bullet")
 
     buf = io.BytesIO()
     doc.save(buf)
@@ -243,11 +409,22 @@ class ExportService:
 
     @staticmethod
     def pdd_a_docx(proyecto: dict, contenido: str) -> io.BytesIO:
-        return _docx_desde_texto(
-            f"PDD — {proyecto['proceso']}",
-            f"Cliente: {proyecto['cliente']} · Tecnología objetivo: {proyecto.get('tecnologia') or '—'}",
-            contenido,
+        """La Gem PDD responde en JSON (ver system_instruction en
+        config_manager). Se parsea con PddService y se arma el documento
+        con las secciones del template corporativo. Si el contenido no es
+        interpretable como PDD estructurado, degrada al volcado de texto
+        genérico en vez de romper la descarga."""
+        data = PddService.parsear(contenido)
+        tiene_contenido = bool(
+            data.get("nombre_proceso") or data.get("camino_feliz") or data.get("aplicaciones")
         )
+        if not tiene_contenido:
+            return _docx_desde_texto(
+                f"PDD — {proyecto['proceso']}",
+                f"Cliente: {proyecto['cliente']} · Tecnología objetivo: {proyecto.get('tecnologia') or '—'}",
+                contenido,
+            )
+        return _pdd_a_docx_estructurado(proyecto, data)
 
     @staticmethod
     def sdd_a_docx(proyecto: dict, contenido: str) -> io.BytesIO:

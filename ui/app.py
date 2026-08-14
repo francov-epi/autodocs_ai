@@ -10,6 +10,7 @@ from services.gems_service import GemsService
 from services.memoria_service import MemoriaService
 from services.export_service import ExportService
 from services.estimacion_service import EstimacionService
+from services.pdd_service import PddService
 from pipeline.relevamiento_pipeline import RelevamientoPipeline
 
 _TIPOS_DOC = ["PDD", "SDD", "QA", "ESTIMACION"]
@@ -95,6 +96,10 @@ def create_app() -> Flask:
             data_est = EstimacionService.parsear(documentos["ESTIMACION"]["contenido"])
             resumen_estimacion = EstimacionService.resumen_legible(data_est)
 
+        resumen_pdd = None
+        if "PDD" in documentos:
+            resumen_pdd = PddService.resumen_legible(PddService.parsear(documentos["PDD"]["contenido"]))
+
         return render_template(
             "resultado.html",
             proyecto=proyecto,
@@ -102,6 +107,7 @@ def create_app() -> Flask:
             tipos=_TIPOS_DOC,
             alertas=alertas,
             resumen_estimacion=resumen_estimacion,
+            resumen_pdd=resumen_pdd,
         )
 
     @app.route("/api/proyecto/<int:proyecto_id>/editar", methods=["POST"])
@@ -132,6 +138,8 @@ def create_app() -> Flask:
             respuesta["resumen"] = EstimacionService.resumen_legible(
                 EstimacionService.parsear(nuevo_contenido)
             )
+        elif tipo == "PDD":
+            respuesta["resumen"] = PddService.resumen_legible(PddService.parsear(nuevo_contenido))
         return jsonify(respuesta)
 
     @app.route("/api/proyecto/<int:proyecto_id>/feedback", methods=["POST"])
