@@ -25,14 +25,7 @@
 
     {% for t in tipos %}
     <div class="tab-panel {% if loop.first %}active{% endif %}" id="panel-{{ t }}">
-      {% if t in ['ESTIMACION', 'PDD'] %}
-        {% set resumen = resumen_estimacion if t == 'ESTIMACION' else resumen_pdd %}
-        <div class="result-box {% if not documentos.get(t) %}empty{% endif %}" id="resumen-{{ t }}">{{ resumen or 'Esta Gem todavía no generó contenido para este proyecto.' }}</div>
-        <div class="result-box hidden" id="contenido-{{ t }}" style="margin-top:8px; font-size:.68rem; color:var(--text-mid)">{{ documentos.get(t, {}).get('contenido', '') }}</div>
-        <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="toggleJson('{{ t }}')">Ver/ocultar JSON crudo</button>
-      {% else %}
-        <div class="result-box {% if not documentos.get(t) %}empty{% endif %}" id="contenido-{{ t }}">{{ documentos.get(t, {}).get('contenido', 'Esta Gem todavía no generó contenido para este proyecto.') }}</div>
-      {% endif %}
+      <div class="result-box {% if not documentos.get(t) %}empty{% endif %}" id="contenido-{{ t }}">{{ documentos.get(t, {}).get('contenido', 'Esta Gem todavía no generó contenido para este proyecto.') }}</div>
 
       <div class="flex gap-2 mt-4 wrap">
         <a href="/export/{{ proyecto.id }}/{{ t }}" class="btn btn-secondary btn-sm">
@@ -103,19 +96,13 @@ function mostrarTab(tipo) {
   document.getElementById('panel-' + tipo).classList.add('active');
 }
 
-function toggleJson(tipo) {
-  document.getElementById('contenido-' + tipo).classList.toggle('hidden');
-}
-
 async function editarDocumento(tipo) {
   const input = document.getElementById('editar-' + tipo);
   const instruccion = input.value.trim();
   if (!instruccion) return;
   const box = document.getElementById('contenido-' + tipo);
-  const resumenBox = ['ESTIMACION', 'PDD'].includes(tipo) ? document.getElementById('resumen-' + tipo) : null;
   const anterior = box.textContent;
-  const anteriorResumen = resumenBox ? resumenBox.textContent : null;
-  (resumenBox || box).textContent = 'Aplicando edición con la Gem correspondiente...';
+  box.textContent = 'Aplicando edición con la Gem correspondiente...';
   box.classList.remove('empty');
 
   try {
@@ -127,11 +114,9 @@ async function editarDocumento(tipo) {
     const data = await r.json();
     if (data.error) throw new Error(data.error);
     box.textContent = data.contenido;
-    if (resumenBox && data.resumen) resumenBox.textContent = data.resumen;
     input.value = '';
   } catch (e) {
     box.textContent = anterior;
-    if (resumenBox) resumenBox.textContent = anteriorResumen;
     alert('Error al editar: ' + e.message);
   }
 }
