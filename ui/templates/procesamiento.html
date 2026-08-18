@@ -8,7 +8,7 @@
 </div>
 
 <div class="grid-5 mb-4" id="gem-cards">
-  <div class="gem-card"><div class="gem-name">Ingesta</div><div class="gem-status" data-gem="Ingesta"><span class="dot dot-info"></span><span>En espera</span></div></div>
+  <div class="gem-card"><div class="gem-name">Ingesta</div><div class="gem-status" data-gem="Agente de Ingesta y Estructuración"><span class="dot dot-info"></span><span>En espera</span></div></div>
   <div class="gem-card"><div class="gem-name">Gem PDD</div><div class="gem-status" data-gem="Gem PDD — Analista Funcional"><span class="dot dot-info"></span><span>En espera</span></div></div>
   <div class="gem-card"><div class="gem-name">Gem SDD</div><div class="gem-status" data-gem="Gem SDD — Arquitecto de Solución"><span class="dot dot-info"></span><span>En espera</span></div></div>
   <div class="gem-card"><div class="gem-name">Gem QA</div><div class="gem-status" data-gem="Gem QA — Control de Calidad"><span class="dot dot-info"></span><span>En espera</span></div></div>
@@ -16,9 +16,12 @@
 </div>
 
 <div class="panel mb-4" id="freno-panel" style="display:none; border-left:3px solid var(--red)">
-  <div class="panel-title"><span class="dot"></span>Proceso frenado — Límite Operativo de Entrada</div>
-  <p id="freno-motivo" style="font-size:.8rem; color:var(--text-hi)"></p>
-  <a href="/relevamiento/nuevo" class="btn btn-secondary mt-4">Volver a cargar con más contexto</a>
+  <div class="panel-title"><span class="dot"></span><span id="freno-titulo">Proceso frenado</span></div>
+  <p id="freno-motivo" style="font-size:.8rem; color:var(--text-hi); white-space:pre-wrap"></p>
+  <div class="flex gap-4 mt-4">
+    <a href="/relevamiento/nuevo" class="btn btn-secondary">Volver a cargar con más contexto</a>
+    <button type="button" class="btn btn-primary" id="btn-reintentar" onclick="iniciar()" style="display:none">Reintentar ahora</button>
+  </div>
 </div>
 
 <div class="panel">
@@ -82,11 +85,21 @@ async function refrescarEstado() {
     clearInterval(polling);
   } else if (data.estado === 'frenado') {
     badge.textContent = 'Frenado'; badge.className = 'tag tag-red';
+    document.getElementById('freno-titulo').textContent = 'Proceso frenado — Límite Operativo de Entrada';
+    document.getElementById('btn-reintentar').style.display = 'none';
+    document.getElementById('freno-panel').style.display = 'block';
+    document.getElementById('freno-motivo').textContent = data.motivo_freno || '';
+    clearInterval(polling);
+  } else if (data.estado === 'error') {
+    badge.textContent = 'Error'; badge.className = 'tag tag-red';
+    document.getElementById('freno-titulo').textContent = 'Ciclo interrumpido por un error de conexión con Gemini';
+    document.getElementById('btn-reintentar').style.display = 'inline-flex';
     document.getElementById('freno-panel').style.display = 'block';
     document.getElementById('freno-motivo').textContent = data.motivo_freno || '';
     clearInterval(polling);
   } else if (data.estado === 'procesando') {
     badge.textContent = 'Procesando…'; badge.className = 'tag tag-amber';
+    document.getElementById('freno-panel').style.display = 'none';
   } else {
     badge.textContent = 'Borrador'; badge.className = 'tag tag-cyan';
   }

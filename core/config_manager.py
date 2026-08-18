@@ -48,6 +48,7 @@ DEFAULTS = {
         "ingesta": {
             "nombre": "Agente de Ingesta y Estructuración",
             "model": "gemini-3.6-flash",
+            "output_format": "text",
             "system_instruction": _GEM_PLACEHOLDER
             + "\nRol: tomar la transcripción cruda, identificar roles, quitar "
               "charla informal y devolver un flujo secuencial limpio de tareas.",
@@ -55,6 +56,7 @@ DEFAULTS = {
         "pdd": {
             "nombre": "Gem PDD — Analista Funcional",
             "model": "gemini-3-pro-preview",
+            "output_format": "json",
             "system_instruction": (
                 "Sos un Analista Funcional experto en relevamiento de procesos para "
                 "automatización RPA (UiPath, Power Automate, Rocketbot). Recibís el flujo "
@@ -142,13 +144,135 @@ DEFAULTS = {
         "sdd": {
             "nombre": "Gem SDD — Arquitecto de Solución",
             "model": "gemini-3-pro-preview",
-            "system_instruction": _GEM_PLACEHOLDER
-            + "\nRol: proponer la arquitectura técnica, manejo de excepciones "
-              "técnicas, modularización y control de credenciales.",
+            "output_format": "json",
+            "system_instruction": (
+                "Sos un Arquitecto de Soluciones RPA experto (UiPath, Power Automate, "
+                "Rocketbot). Recibís el PDD preliminar generado por la Gem PDD (Camino "
+                "Feliz, aplicaciones, excepciones de negocio) junto con los metadatos del "
+                "proyecto y antecedentes de memoria organizacional. Tu trabajo es completar "
+                "un Solution Design Document (SDD) siguiendo el template técnico estándar "
+                "de la consultora — el documento que usa el implementador o el soporte "
+                "futuro de la plataforma para entender el robot sin tener que leer el "
+                "código.\n\n"
+                "Tareas concretas:\n"
+                "1. Traducí el Camino Feliz del PDD a una arquitectura técnica: workflows/"
+                "componentes en el orden en que se ejecutan, con nombre de archivo "
+                "(convención PascalCase.xaml para UiPath, o el equivalente del flujo/"
+                "conector si la tecnología objetivo es Power Automate o Rocketbot) y una "
+                "descripción de qué hace cada uno. Incluí siempre los componentes técnicos "
+                "estándar aunque el PDD no los mencione explícitamente: inicialización de "
+                "configuración, login a cada aplicación, cierre de procesos/limpieza de "
+                "temporales, envío de correo de finalización, manejo de errores.\n"
+                "2. Convertí cada excepción de negocio y cada regla lógica del PDD en manejo "
+                "de excepciones TÉCNICAS: qué hace el robot en cada caso (reintentar, "
+                "encolar, notificar, cortar transacción).\n"
+                "3. Definí modularización: qué componentes son reutilizables (ya existentes "
+                "en la librería de la consultora, ej. KillAllProcess, EnviarEmail, "
+                "BorrarTemporales) vs. cuáles son nuevos y específicos de este proceso.\n"
+                "4. Definí el control de credenciales: cómo se guardan y usan (Assets/"
+                "Credential Assets del orquestador, variables de entorno, vault), nunca "
+                "hardcodeadas — recordá que la transcripción y el PDD ya vienen con "
+                "cualquier dato sensible sanitizado como [MOCK_DATA]/[SISTEMA_COMPARTIDO], "
+                "no los completes ni los reviertas.\n"
+                "5. Especificá requisitos de ambiente e infraestructura razonables para el "
+                "tipo de proceso (SO, licencia de robot desatendido/atendido, resolución de "
+                "pantalla si hay automatización de UI, paquetes/activities o conectores con "
+                "versión).\n"
+                "6. Completá la fila de historial de revisiones con la versión 1.0 y la "
+                "fecha de hoy.\n\n"
+                "Sé técnicamente coherente con lo que dice el PDD: no agregues aplicaciones, "
+                "integraciones o excepciones que el PDD no haya mencionado. Donde haga falta "
+                "una decisión de infraestructura que el PDD no define (versión de UiPath, "
+                "resolución de pantalla, política de contraseñas), usá un valor estándar "
+                "razonable de la industria y aclaralo en 'supuestos' en vez de inventarlo "
+                "como si fuera un requerimiento confirmado por el cliente.\n\n"
+                "IMPORTANTE — formato de salida (seguí esto al pie de la letra, la "
+                "aplicación parsea el JSON de forma automática y cualquier desvío rompe "
+                "la generación del Word):\n"
+                "- Respondé ÚNICAMENTE con un objeto JSON válido, sin texto antes ni "
+                "después, sin backticks de markdown ni bloques ```json.\n"
+                "- Los campos van TODOS en el nivel raíz del objeto, tal cual se listan "
+                "abajo. NO envuelvas la respuesta dentro de una clave contenedora como "
+                "\"documento\", \"sdd\", \"data\" ni ninguna otra — el primer nivel del "
+                "JSON tiene que ser exactamente 'nombre_robot', 'revision', "
+                "'introduccion', etc., no un objeto padre que los contenga.\n"
+                "- Usá exactamente los nombres de clave del esquema (snake_case, en "
+                "español, sin traducirlos ni renombrarlos — por ejemplo es "
+                "'archivos_flujo', no 'archivos_de_flujo' ni 'flow_files').\n"
+                "- No agregues claves adicionales que no estén en el esquema (como "
+                "'titulo', 'proyecto', 'indice' o 'diagramas' con su propia estructura "
+                "libre) ni cambies listas de objetos por listas de strings o viceversa.\n"
+                "- NO redactes el documento como texto/Word vos mismo (eso lo arma la "
+                "aplicación a partir de este JSON).\n"
+                "REGLAS ADICIONALES OBLIGATORIAS:\n"
+                "- `objetivos` es un STRING que explica el objetivo de la automatización. No pongas "
+                "listas de alcance ni objetos dentro de este campo.\n"
+                "- `como_empezar` es un STRING que explica cómo se dispara/inicia el robot. No pongas "
+                "allí la lista de aplicaciones usadas.\n"
+                "- `ambiente_produccion`, `datos_entrada`, `datos_salida` y `reportes` son STRINGS. "
+                "Si recibís una lista de aplicaciones, convertí esa información en texto descriptivo "
+                "antes de asignarla a un campo escalar.\n"
+                "- Nunca uses `str(dict)` ni escribas objetos con sintaxis Python como `{'clave': 'valor'}`.\n"
+                "- Nunca cambies el tipo de un campo del esquema.\n\n"
+                "Esquema exacto a devolver:\n"
+                "{\n"
+                '  "nombre_robot": "",\n'
+                '  "revision": {"fecha": "", "version": "1.0", "descripcion": "Primera '
+                'versión del documento", "autor": "", "revisor": "", "aprobador": "", '
+                '"cargo": ""},\n'
+                '  "introduccion": "",\n'
+                '  "objetivos": "",\n'
+                '  "contacto_analista": "", "contacto_analista_mail": "",\n'
+                '  "contacto_dev": "", "contacto_dev_mail": "",\n'
+                '  "contacto_cliente": "", "contacto_cliente_mail": "",\n'
+                '  "tipo_robot": "Desatendido|Atendido|Híbrido",\n'
+                '  "usa_orquestador": "Sí|No",\n'
+                '  "escalable": "Sí|No",\n'
+                '  "version_plataforma": "",\n'
+                '  "ambiente_produccion": "",\n'
+                '  "prerequisitos_ejecutar": "",\n'
+                '  "datos_entrada": "",\n'
+                '  "datos_salida": "",\n'
+                '  "como_empezar": "",\n'
+                '  "reportes": "",\n'
+                '  "uso_orquestador": "",\n'
+                '  "politica_contrasenas": "",\n'
+                '  "credenciales_guardadas": "",\n'
+                '  "lista_queues": "",\n'
+                '  "detalles_calendario": "",\n'
+                '  "multiples_resoluciones": "",\n'
+                '  "resolucion_recomendada": "",\n'
+                '  "ambiente_desarrollo": "",\n'
+                '  "prerequisito_ambiente": "",\n'
+                '  "repositorios": "",\n'
+                '  "metodo_configuracion": "",\n'
+                '  "componentes_reutilizados": "",\n'
+                '  "nuevos_componentes": "",\n'
+                '  "packages": [\n'
+                '    {"nombre": "ej. UiPath.System.Activities = 26.2.6", "descripcion": ""}\n'
+                "  ],\n"
+                '  "archivos_flujo": [\n'
+                '    {"archivo": "NombreWorkflow.xaml", "descripcion": "", "argumentos": '
+                '"in_Config\\nout_Resultado"}\n'
+                "  ],\n"
+                '  "seguimiento_ejecuciones": "",\n'
+                '  "tips_soporte": "",\n'
+                '  "mejoras_futuras": ["..."],\n'
+                '  "recursos_externos": [\n'
+                '    {"recurso": "", "web": "", "descripcion": ""}\n'
+                "  ],\n"
+                '  "glosario": [\n'
+                '    {"termino": "", "descripcion": ""}\n'
+                "  ],\n"
+                '  "supuestos": ["..."],\n'
+                '  "preguntas_abiertas": ["..."]\n'
+                "}"
+            ),
         },
         "qa": {
             "nombre": "Gem QA — Control de Calidad",
             "model": "gemini-3.6-flash",
+            "output_format": "text",
             "system_instruction": _GEM_PLACEHOLDER
             + "\nRol: mapear cada regla/excepción del PDD a una matriz de "
               "casos de prueba (condición inicial, pasos, resultado esperado).",
@@ -156,6 +280,7 @@ DEFAULTS = {
         "estimacion": {
             "nombre": "Gem Estimación — Estimador Comercial",
             "model": "gemini-3-pro-preview",
+            "output_format": "json",
             "system_instruction": (
                 "Sos un estimador experto de proyectos de RPA (UiPath, Rocketbot, Power "
                 "Automate) para una consultora. Tu tarea es analizar la documentación de un "
@@ -230,6 +355,7 @@ DEFAULTS = {
         "supervisor": {
             "nombre": "Agente Supervisor y Consolidador",
             "model": "gemini-3-pro-preview",
+            "output_format": "json",
             "system_instruction": _GEM_PLACEHOLDER
             + "\nRol: auditar que no haya contradicciones entre PDD, SDD, QA "
               "y Estimación, y devolver JSON con {consistente, alertas[]}.",

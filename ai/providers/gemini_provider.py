@@ -31,11 +31,16 @@ class GeminiProvider:
         self.api_key = config.get("api_key", "")
         self.model = config.get("model", "gemini-3.6-flash")
 
-    def analyze(self, prompt: str, system_instruction: str = "") -> str:
+    def analyze(self, prompt: str, system_instruction: str = "", response_json: bool = False) -> str:
         """Llama a la API de Gemini. `system_instruction` es el prompt del
         Gem correspondiente (definido/editado en /configuracion); `prompt`
         es el contenido variable de la llamada (transcripción, flujo
-        estructurado, PDD preliminar, etc.)."""
+        estructurado, PDD preliminar, etc.). `response_json=True` activa el
+        modo de salida estructurada nativo de Gemini (generationConfig.
+        responseMimeType=application/json): el modelo queda restringido a
+        devolver únicamente JSON válido, en vez de confiar solo en que la
+        instrucción de texto alcance para evitar que agregue markdown,
+        tablas en texto o diagramas ASCII alrededor de la respuesta."""
         if not self.api_key:
             return "⚠ Gemini: API key no configurada. Ve a Configuración."
 
@@ -43,6 +48,8 @@ class GeminiProvider:
         body = {"contents": [{"role": "user", "parts": [{"text": prompt}]}]}
         if system_instruction:
             body["systemInstruction"] = {"parts": [{"text": system_instruction}]}
+        if response_json:
+            body["generationConfig"] = {"responseMimeType": "application/json"}
 
         try:
             r = requests.post(url, json=body, timeout=120)

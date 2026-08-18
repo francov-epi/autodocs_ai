@@ -25,8 +25,8 @@
 
     {% for t in tipos %}
     <div class="tab-panel {% if loop.first %}active{% endif %}" id="panel-{{ t }}">
-      {% if t in ['ESTIMACION', 'PDD'] %}
-        {% set resumen = resumen_estimacion if t == 'ESTIMACION' else resumen_pdd %}
+      {% if t in ['ESTIMACION', 'PDD', 'SDD'] %}
+        {% set resumen = resumen_estimacion if t == 'ESTIMACION' else (resumen_pdd if t == 'PDD' else resumen_sdd) %}
         <div class="result-box {% if not documentos.get(t) %}empty{% endif %}" id="resumen-{{ t }}">{{ resumen or 'Esta Gem todavía no generó contenido para este proyecto.' }}</div>
         <div class="result-box hidden" id="contenido-{{ t }}" style="margin-top:8px; font-size:.68rem; color:var(--text-mid)">{{ documentos.get(t, {}).get('contenido', '') }}</div>
         <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="toggleJson('{{ t }}')">Ver/ocultar JSON crudo</button>
@@ -112,7 +112,7 @@ async function editarDocumento(tipo) {
   const instruccion = input.value.trim();
   if (!instruccion) return;
   const box = document.getElementById('contenido-' + tipo);
-  const resumenBox = ['ESTIMACION', 'PDD'].includes(tipo) ? document.getElementById('resumen-' + tipo) : null;
+  const resumenBox = ['ESTIMACION', 'PDD', 'SDD'].includes(tipo) ? document.getElementById('resumen-' + tipo) : null;
   const anterior = box.textContent;
   const anteriorResumen = resumenBox ? resumenBox.textContent : null;
   (resumenBox || box).textContent = 'Aplicando edición con la Gem correspondiente...';

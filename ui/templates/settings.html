@@ -74,7 +74,13 @@
                           ('estimacion','Gem Estimación — Estimador Comercial'),
                           ('supervisor','Agente Supervisor y Consolidador')] %}
   <div class="gem-config">
-    <h4>{{ nombre }}</h4>
+    <h4>{{ nombre }}
+      {% if cfg.gems[key].output_format == 'json' %}
+        <span class="tag tag-cyan" style="font-size:.55rem; vertical-align:middle;">Salida forzada a JSON</span>
+      {% else %}
+        <span class="tag tag-amber" style="font-size:.55rem; vertical-align:middle;">Salida de texto libre</span>
+      {% endif %}
+    </h4>
     <div class="grid-2">
       <div class="field">
         <label>Modelo</label>
@@ -88,6 +94,13 @@
     <div class="field">
       <label>System instruction (prompt del Gem)</label>
       <textarea name="{{ key }}_instruction" rows="4">{{ cfg.gems[key].system_instruction }}</textarea>
+      {% if cfg.gems[key].output_format == 'json' %}
+      <p style="font-size:.65rem; color:var(--text-lo); margin-top:6px;">
+        Esta Gem usa el modo de salida estructurada de Gemini (generationConfig.responseMimeType=application/json):
+        el modelo queda restringido a devolver únicamente JSON, aunque el prompt no lo pida explícitamente.
+        No hace falta (ni sirve) pedirle acá que devuelva markdown o texto plano.
+      </p>
+      {% endif %}
     </div>
   </div>
   {% endfor %}

@@ -21,6 +21,7 @@ from openpyxl.utils import get_column_letter
 
 from services.estimacion_service import EstimacionService, FASES_ESPERADAS
 from services.pdd_service import PddService
+from services.sdd_service import SddService
 
 # Paleta tomada del template histórico de Estimación (Google Sheets → Excel)
 _HEADER_FILL = PatternFill(start_color="C9DAF8", end_color="C9DAF8", fill_type="solid")
@@ -229,6 +230,172 @@ def _pdd_a_docx_estructurado(proyecto: dict, data: dict) -> io.BytesIO:
     return buf
 
 
+def _sdd_a_docx_estructurado(proyecto: dict, data: dict) -> io.BytesIO:
+    """Arma el SDD replicando las secciones y tablas del template técnico
+    estándar (estilo UNACEM/SAMAN): historial de revisiones, detalles del
+    proceso/ejecución/desarrollo, packages, archivos de flujo, seguimiento,
+    mejoras futuras, recursos externos y glosario."""
+    doc = Document()
+    nombre_robot = data.get("nombre_robot") or proyecto.get("proceso", "")
+    rev = data.get("revision") or {}
+
+    h = doc.add_heading("Solution Design Document", level=0)
+    for run in h.runs:
+        run.font.color.rgb = RGBColor(0x1A, 0x2A, 0x5C)
+    doc.add_heading(f"{proyecto.get('cliente','')} — {nombre_robot}", level=1)
+    doc.add_paragraph(f"Generado por AutoDocs AI — {datetime.now():%d/%m/%Y %H:%M}").italic = True
+    doc.add_paragraph("")
+
+    doc.add_heading("Historial de revisiones del documento", level=2)
+    _tabla_docx(
+        doc, ["Fecha", "Versión", "Descripción", "Autor", "Revisor", "Aprobador", "Cargo"],
+        [[rev.get("fecha") or datetime.now().strftime("%m/%Y"), rev.get("version", "1.0"),
+          rev.get("descripcion", "Primera versión del documento"), rev.get("autor"),
+          rev.get("revisor"), rev.get("aprobador"), rev.get("cargo")]],
+    )
+
+    # ── 1-3. Introducción / Objetivos / Contactos ───────────────────
+    doc.add_heading("1. Introducción", level=2)
+    doc.add_paragraph(data.get("introduccion") or
+                       "En el presente documento se da a conocer el diseño de la automatización "
+                       "RPA aplicada para el proceso. El mismo debe ser actualizado con cada "
+                       "modificación que se realice a futuro.")
+    doc.add_heading("2. Objetivos", level=2)
+    doc.add_paragraph(data.get("objetivos") or
+                       "Informar al implementador o futuro soporte de la plataforma el proceso automático.")
+    doc.add_heading("3. Email de Contactos", level=2)
+    doc.add_paragraph(f"Analista del proceso: {data.get('contacto_analista','') } — {data.get('contacto_analista_mail','')}")
+    doc.add_paragraph(f"Desarrolladores RPA: {data.get('contacto_dev','')} — {data.get('contacto_dev_mail','')}")
+    doc.add_paragraph(f"Referente del proceso (Cliente): {data.get('contacto_cliente','')} — {data.get('contacto_cliente_mail','')}")
+
+    # ── 4. Detalles del Proceso ──────────────────────────────────────
+    doc.add_heading("4. Detalles del Proceso", level=2)
+    _tabla_docx(
+        doc, ["Item", "Descripción"],
+        [
+            ["Nombre del proceso", nombre_robot],
+            ["Tipo de Robot", data.get("tipo_robot")],
+            ["¿Se usa orquestador?", data.get("usa_orquestador")],
+            ["Escalable", data.get("escalable")],
+            ["Versión de la plataforma", data.get("version_plataforma")],
+        ],
+    )
+
+    # ── 5. Detalles de ejecución del proceso ─────────────────────────
+    doc.add_heading("5. Detalles de ejecución del proceso", level=2)
+    _tabla_docx(
+        doc, ["Item", "Descripción"],
+        [
+            ["Detalle del ambiente de producción", data.get("ambiente_produccion")],
+            ["Pre-requisitos para ejecutar", data.get("prerequisitos_ejecutar")],
+            ["Datos de entrada", data.get("datos_entrada")],
+            ["Datos de salida esperados", data.get("datos_salida")],
+            ["¿Cómo empezar el proceso automático?", data.get("como_empezar")],
+            ["Reportes", data.get("reportes")],
+            ["¿Cómo es usado el orquestador?", data.get("uso_orquestador")],
+            ["Política de contraseñas", data.get("politica_contrasenas")],
+            ["Credenciales guardadas", data.get("credenciales_guardadas")],
+            ["Lista de queues", data.get("lista_queues")],
+            ["Detalles del calendario", data.get("detalles_calendario")],
+            ["¿Múltiples resoluciones soportadas?", data.get("multiples_resoluciones")],
+            ["Resolución recomendada", data.get("resolucion_recomendada")],
+        ],
+    )
+
+    # ── 6. Detalles del desarrollo ────────────────────────────────────
+    doc.add_heading("6. Detalles del desarrollo", level=2)
+    _tabla_docx(
+        doc, ["Item", "Descripción"],
+        [
+            ["Ambiente usado para el desarrollo", data.get("ambiente_desarrollo")],
+            ["Pre-requisito del ambiente", data.get("prerequisito_ambiente")],
+            ["Repositorios", data.get("repositorios")],
+            ["Método de configuración", data.get("metodo_configuracion")],
+            ["Lista de componentes reutilizados", data.get("componentes_reutilizados")],
+            ["Lista de nuevos componentes reutilizables", data.get("nuevos_componentes")],
+        ],
+    )
+
+    # ── 7. Packages ────────────────────────────────────────────────────
+    doc.add_heading("7. Packages", level=2)
+    packages = data.get("packages") or []
+    _tabla_docx(
+        doc, ["Nombre", "Descripción"],
+        [[pkg.get("nombre"), pkg.get("descripcion")] for pkg in packages if isinstance(pkg, dict)]
+        or [["—", ""]],
+    )
+
+    # ── 8. Archivos de Flujo ───────────────────────────────────────────
+    doc.add_heading("8. Archivos de Flujo", level=3)
+    archivos = data.get("archivos_flujo") or []
+    _tabla_docx(
+        doc, ["Archivo", "Descripción", "Argumentos"],
+        [[a.get("archivo"), a.get("descripcion"), a.get("argumentos")] for a in archivos if isinstance(a, dict)]
+        or [["—", "", ""]],
+    )
+
+    # ── 9. Diagramas ────────────────────────────────────────────────────
+    doc.add_heading("9. Diagramas", level=3)
+    doc.add_paragraph("Level 1")
+    doc.add_paragraph("Level 2")
+    doc.add_paragraph("Level 3")
+    p_diag = doc.add_paragraph()
+    p_diag.add_run(
+        "⚠ Insertar acá los diagramas C4 (Nivel 1/2/3) del flujo de automatización — "
+        "AutoDocs AI no genera diagramas de arquitectura de bajo nivel automáticamente."
+    ).italic = True
+
+    # ── 10. Seguimiento ──────────────────────────────────────────────
+    doc.add_heading("10. Seguimiento", level=2)
+    doc.add_heading("10.1 Ejecuciones", level=3)
+    doc.add_paragraph(data.get("seguimiento_ejecuciones") or "A definir.")
+    doc.add_heading("10.2 Tips de soporte", level=3)
+    doc.add_paragraph(data.get("tips_soporte") or "<<Detallar los posibles resultados y las acciones a realizar en cada caso>>")
+
+    # ── 11. Mejoras Futuras ────────────────────────────────────────────
+    doc.add_heading("11. Mejoras Futuras", level=2)
+    mejoras = data.get("mejoras_futuras") or []
+    if mejoras:
+        for m in mejoras:
+            doc.add_paragraph(str(m), style="List Bullet")
+    else:
+        doc.add_paragraph("<<Se detallan aquí las mejoras a futuro detectadas durante el desarrollo>>")
+
+    # ── 12. Recursos externos ───────────────────────────────────────────
+    doc.add_heading("12. Recursos externos", level=2)
+    recursos = data.get("recursos_externos") or []
+    _tabla_docx(
+        doc, ["Recurso", "Web", "Descripción"],
+        [[r.get("recurso"), r.get("web"), r.get("descripcion")] for r in recursos if isinstance(r, dict)]
+        or [["—", "", ""]],
+    )
+
+    # ── 13. Glosario ─────────────────────────────────────────────────
+    doc.add_heading("13. Glosario", level=2)
+    glosario = data.get("glosario") or []
+    _tabla_docx(
+        doc, ["Término", "Descripción"],
+        [[g.get("termino"), g.get("descripcion")] for g in glosario if isinstance(g, dict)]
+        or [["—", ""]],
+    )
+
+    if data.get("supuestos") or data.get("preguntas_abiertas"):
+        doc.add_heading("14. Notas del análisis automatizado", level=2)
+        if data.get("supuestos"):
+            doc.add_heading("14.1 Supuestos", level=3)
+            for s in data["supuestos"]:
+                doc.add_paragraph(str(s), style="List Bullet")
+        if data.get("preguntas_abiertas"):
+            doc.add_heading("14.2 Preguntas abiertas para el cliente/implementador", level=3)
+            for s in data["preguntas_abiertas"]:
+                doc.add_paragraph(str(s), style="List Bullet")
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf
+
+
 def _estimacion_a_xlsx_estructurada(proyecto: dict, data: dict) -> io.BytesIO:
     """Arma la planilla de Estimación con el mismo layout que el template
     histórico: bloque de fases (col C..J), fila de Horas Total, bloque de
@@ -428,11 +595,22 @@ class ExportService:
 
     @staticmethod
     def sdd_a_docx(proyecto: dict, contenido: str) -> io.BytesIO:
-        return _docx_desde_texto(
-            f"SDD — {proyecto['proceso']}",
-            f"Cliente: {proyecto['cliente']} · Criticidad: {proyecto.get('criticidad') or '—'}",
-            contenido,
+        """La Gem SDD responde en JSON (ver system_instruction en
+        config_manager). Se parsea con SddService y se arma el documento
+        con las secciones y tablas del template técnico estándar. Si el
+        contenido no es interpretable como SDD estructurado, degrada al
+        volcado de texto genérico en vez de romper la descarga."""
+        data = SddService.parsear(contenido)
+        tiene_contenido = bool(
+            data.get("nombre_robot") or data.get("archivos_flujo") or data.get("packages")
         )
+        if not tiene_contenido:
+            return _docx_desde_texto(
+                f"SDD — {proyecto['proceso']}",
+                f"Cliente: {proyecto['cliente']} · Criticidad: {proyecto.get('criticidad') or '—'}",
+                contenido,
+            )
+        return _sdd_a_docx_estructurado(proyecto, data)
 
     @staticmethod
     def qa_a_xlsx(proyecto: dict, contenido: str) -> io.BytesIO:

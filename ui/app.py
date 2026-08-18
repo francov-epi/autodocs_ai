@@ -11,6 +11,7 @@ from services.memoria_service import MemoriaService
 from services.export_service import ExportService
 from services.estimacion_service import EstimacionService
 from services.pdd_service import PddService
+from services.sdd_service import SddService
 from pipeline.relevamiento_pipeline import RelevamientoPipeline
 
 _TIPOS_DOC = ["PDD", "SDD", "QA", "ESTIMACION"]
@@ -100,6 +101,10 @@ def create_app() -> Flask:
         if "PDD" in documentos:
             resumen_pdd = PddService.resumen_legible(PddService.parsear(documentos["PDD"]["contenido"]))
 
+        resumen_sdd = None
+        if "SDD" in documentos:
+            resumen_sdd = SddService.resumen_legible(SddService.parsear(documentos["SDD"]["contenido"]))
+
         return render_template(
             "resultado.html",
             proyecto=proyecto,
@@ -108,6 +113,7 @@ def create_app() -> Flask:
             alertas=alertas,
             resumen_estimacion=resumen_estimacion,
             resumen_pdd=resumen_pdd,
+            resumen_sdd=resumen_sdd,
         )
 
     @app.route("/api/proyecto/<int:proyecto_id>/editar", methods=["POST"])
@@ -140,6 +146,8 @@ def create_app() -> Flask:
             )
         elif tipo == "PDD":
             respuesta["resumen"] = PddService.resumen_legible(PddService.parsear(nuevo_contenido))
+        elif tipo == "SDD":
+            respuesta["resumen"] = SddService.resumen_legible(SddService.parsear(nuevo_contenido))
         return jsonify(respuesta)
 
     @app.route("/api/proyecto/<int:proyecto_id>/feedback", methods=["POST"])
@@ -228,6 +236,7 @@ def create_app() -> Flask:
                 nuevo_cfg["gems"][gem_key] = {
                     "model": form.get(f"{gem_key}_model"),
                     "system_instruction": form.get(f"{gem_key}_instruction", ""),
+                    "output_format": "json" if gem_key in {"pdd", "sdd", "qa", "estimacion", "supervisor"} else "text",
                 }
             ConfigManager.save(nuevo_cfg)
             return redirect(url_for("configuracion"))

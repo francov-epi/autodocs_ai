@@ -67,6 +67,8 @@ class RelevamientoPipeline:
                 f"Transcripción sanitizada:\n{sanitizada}"
             ),
         )
+        if RelevamientoPipeline._abortar_si_error(proyecto_id, "Ingesta", flujo):
+            return
         ProyectoRepository.actualizar(proyecto_id, {"flujo_estructurado": flujo})
 
         # ── 4) Memoria organizacional relevante (punto 6) ───────────────
@@ -79,7 +81,10 @@ class RelevamientoPipeline:
         # ── 5) Análisis — Gems documentales (PDD, SDD, QA, Estimación) ──
         # Se ejecutan en secuencia en esta implementación de referencia;
         # en el stack propuesto (LangGraph) corren en paralelo dentro del
-        # mismo nodo de "Análisis" del ciclo.
+        # mismo nodo de "Análisis" del ciclo. Si alguna Gem falla (error de
+        # API), el ciclo se corta acá: seguir mandando ese error como si
+        # fuera contenido real a las Gems siguientes solo produce
+        # documentos con alucinaciones sobre "no se recibió información".
         base_ctx = (
             f"Cliente: {proyecto['cliente']}\nProceso: {proyecto['proceso']}\n"
             f"Tecnología objetivo: {proyecto.get('tecnologia') or 'no especificada'}\n"
@@ -89,24 +94,32 @@ class RelevamientoPipeline:
         )
 
         pdd = GemsService.invocar("pdd", proyecto_id, contenido=base_ctx)
+        if RelevamientoPipeline._abortar_si_error(proyecto_id, "Gem PDD", pdd):
+            return
         ProyectoRepository.guardar_documento(proyecto_id, "PDD", pdd)
 
         sdd = GemsService.invocar(
             "sdd", proyecto_id,
             contenido=f"{base_ctx}\n\nPDD preliminar:\n{pdd}",
         )
+        if RelevamientoPipeline._abortar_si_error(proyecto_id, "Gem SDD", sdd):
+            return
         ProyectoRepository.guardar_documento(proyecto_id, "SDD", sdd)
 
         qa = GemsService.invocar(
             "qa", proyecto_id,
             contenido=f"{base_ctx}\n\nPDD:\n{pdd}\n\nSDD:\n{sdd}",
         )
+        if RelevamientoPipeline._abortar_si_error(proyecto_id, "Gem QA", qa):
+            return
         ProyectoRepository.guardar_documento(proyecto_id, "QA", qa)
 
         estimacion = GemsService.invocar(
             "estimacion", proyecto_id,
             contenido=f"{base_ctx}\n\nPDD:\n{pdd}\n\nSDD:\n{sdd}\n\nCasos de prueba:\n{qa}",
         )
+        if RelevamientoPipeline._abortar_si_error(proyecto_id, "Gem Estimación", estimacion):
+            return
         ProyectoRepository.guardar_documento(proyecto_id, "ESTIMACION", estimacion)
 
         # ── 6) Planificación — Agente Supervisor y Consolidador ─────────
@@ -118,7 +131,16 @@ class RelevamientoPipeline:
                 f"PDD:\n{pdd}\n\nSDD:\n{sdd}\n\nQA:\n{qa}\n\nEstimación:\n{estimacion}"
             ),
         )
-        resultado_supervisor = ConsolidacionService.parsear_respuesta_supervisor(respuesta_supervisor)
+        if GemsService.es_error(respuesta_supervisor):
+            # el supervisor es el único paso donde, si falla, igual conviene
+            # dejar los 4 documentos ya generados disponibles para revisión
+            # humana en vez de descartar todo el trabajo previo.
+            ProyectoRepository.log(proyecto_id, "Consolidador",
+                                    "No se pudo auditar consistencia (falló la Gem Supervisor); "
+                                    "los documentos generados quedan disponibles igual.", "warn")
+            resultado_supervisor = {"consistente": False, "alertas": []}
+        else:
+            resultado_supervisor = ConsolidacionService.parsear_respuesta_supervisor(respuesta_supervisor)
 
         # chequeo determinístico adicional (Regla de Consistencia de Negocio, punto 7)
         resultado_supervisor["alertas"].extend(
@@ -150,3 +172,24 @@ class RelevamientoPipeline:
             f"Proyecto '{proyecto['proceso']}' ({proyecto['cliente']}) procesado. "
             f"Alertas de consistencia al cierre: {len(resultado_supervisor['alertas'])}.",
         )
+
+    @staticmethod
+    def _abortar_si_error(proyecto_id: int, nombre_paso: str, respuesta: str) -> bool:
+        """Si la respuesta de una Gem es un error de conexión (ver
+        GemsService.es_error), corta el ciclo acá: marca el proyecto como
+        'error' con el detalle real de la falla, en vez de dejar que ese
+        texto de error se siga pasando como contenido a las Gems
+        siguientes (lo que producía documentos alucinando sobre "no se
+        recibió información")."""
+        if not GemsService.es_error(respuesta):
+            return False
+        ProyectoRepository.actualizar(proyecto_id, {
+            "estado": "error",
+            "motivo_freno": f"{nombre_paso}: {respuesta}",
+        })
+        ProyectoRepository.log(
+            proyecto_id, "Pipeline",
+            f"Ciclo interrumpido — {nombre_paso} devolvió un error de conexión con Gemini.",
+            "error",
+        )
+        return True
