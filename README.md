@@ -3,6 +3,8 @@
 Implementación de referencia del proyecto conceptual **AutoDocs AI**
 (Trabajo de Medio Ciclo — UTN-FRBA / Epidata, "IA Aplicada a Organizaciones").
 
+Integrantes: Franco Vega, Daniel Lazo, Ivan Ignacio Rojas Blemon, Yorgenis Martinez y Magali Imizcoz.
+
 Automatiza el ciclo de preventa y relevamiento técnico de RPA/Hyperautomation:
 a partir de una transcripción de relevamiento, orquesta el pool de Gems de
 Gemini (Ingesta, PDD, SDD, QA, Estimación y Supervisor) para producir un
