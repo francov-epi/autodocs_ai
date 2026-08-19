@@ -53,6 +53,8 @@ class GemsService:
             system_instruction=gem_cfg.get("system_instruction", ""),
             response_json=es_json,
             response_schema=SCHEMAS_POR_GEM.get(gem_key) if es_json else None,
+            max_output_tokens=gem_cfg.get("max_output_tokens"),
+            timeout=gem_cfg.get("timeout"),
         )
         if GemsService.es_error(respuesta):
             ProyectoRepository.log(proyecto_id, nombre, f"error: {respuesta[:300]}", nivel="error")

@@ -41,6 +41,11 @@ DEFAULTS = {
         "gemini": {
             "env_key_name": "GOOGLE_API_KEY",
             "model": "gemini-3.6-flash",
+            # Timeout de la llamada HTTP a Gemini. 300s porque los modelos
+            # *-pro-preview (PDD/SDD) son de razonamiento y pueden tardar
+            # bastante más que un flash, sobre todo con transcripciones
+            # largas — subilo acá si "Read timed out" sigue apareciendo.
+            "timeout": 300,
         },
     },
     # ── Pool de Gems (punto 4) — solo conexión, no lógica ──────────────
@@ -57,6 +62,15 @@ DEFAULTS = {
             "nombre": "Gem PDD — Analista Funcional",
             "model": "gemini-3-pro-preview",
             "output_format": "json",
+            # Tope duro de longitud de respuesta. Complementa (no reemplaza)
+            # las instrucciones del prompt tipo "no más de dos párrafos":
+            # esas son una guía que el modelo puede no respetar al pie de
+            # la letra, esto SÍ corta la generación de forma determinística
+            # y de paso acelera la respuesta (menos tokens = menos tiempo,
+            # que es lo que evita el timeout). Si el PDD sale corto/
+            # incompleto con este tope, subirlo con cuidado — más tokens =
+            # más riesgo de volver a pegar en el timeout.
+            "max_output_tokens": 8192,
             "system_instruction": (
                 "Sos un Analista Funcional experto en relevamiento de procesos para "
                 "automatización RPA (UiPath, Power Automate, Rocketbot). Recibís el flujo "
@@ -145,6 +159,7 @@ DEFAULTS = {
             "nombre": "Gem SDD — Arquitecto de Solución",
             "model": "gemini-3-pro-preview",
             "output_format": "json",
+            "max_output_tokens": 8192,
             "system_instruction": (
                 "Sos un Arquitecto de Soluciones RPA experto (UiPath, Power Automate, "
                 "Rocketbot). Recibís el PDD preliminar generado por la Gem PDD (Camino "
