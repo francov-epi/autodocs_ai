@@ -13,6 +13,7 @@ from services.estimacion_service import EstimacionService
 from services.pdd_service import PddService
 from services.sdd_service import SddService
 from services.qa_service import QaService
+from services.supervisor_service import SupervisorService
 from pipeline.relevamiento_pipeline import RelevamientoPipeline
 
 _TIPOS_DOC = ["PDD", "SDD", "QA", "ESTIMACION"]
@@ -110,6 +111,12 @@ def create_app() -> Flask:
         if "QA" in documentos:
             resumen_qa = QaService.resumen_legible(QaService.parsear(documentos["QA"]["contenido"]))
 
+        resumen_supervisor = None
+        if "SUPERVISOR" in documentos:
+            resumen_supervisor = SupervisorService.resumen_legible(
+                SupervisorService.parsear(documentos["SUPERVISOR"]["contenido"])
+            )
+
         return render_template(
             "resultado.html",
             proyecto=proyecto,
@@ -120,6 +127,7 @@ def create_app() -> Flask:
             resumen_pdd=resumen_pdd,
             resumen_sdd=resumen_sdd,
             resumen_qa=resumen_qa,
+            resumen_supervisor=resumen_supervisor,
         )
 
     @app.route("/api/proyecto/<int:proyecto_id>/editar", methods=["POST"])
@@ -172,6 +180,26 @@ def create_app() -> Flask:
                                 "Nuevo criterio registrado por el analista (aprendizaje continuo)", "ok")
         return jsonify({"ok": True})
 
+    @app.route("/api/proyecto/<int:proyecto_id>/reauditar", methods=["POST"])
+    def api_reauditar(proyecto_id):
+        """Vuelve a correr solo el paso del Agente Supervisor y Consolidador
+        sobre los 4 documentos actuales del proyecto (útil después de editar
+        alguno con el agente conversacional), sin rehacer todo el ciclo."""
+        documentos = ProyectoRepository.get_documentos(proyecto_id)
+        faltantes = [t for t in ["PDD", "SDD", "QA", "ESTIMACION"] if t not in documentos]
+        if faltantes:
+            return jsonify({"error": f"Faltan documentos para auditar: {', '.join(faltantes)}"}), 400
+        resultado = RelevamientoPipeline.auditar(
+            proyecto_id,
+            documentos["PDD"]["contenido"], documentos["SDD"]["contenido"],
+            documentos["QA"]["contenido"], documentos["ESTIMACION"]["contenido"],
+        )
+        return jsonify({
+            "ok": True,
+            "resumen": SupervisorService.resumen_legible(resultado),
+            "alertas": ProyectoRepository.get_alertas(proyecto_id),
+        })
+
     # ── exportación ──────────────────────────────────────────────────
     @app.route("/export/<int:proyecto_id>/<tipo>")
     def export_documento(proyecto_id, tipo):
@@ -195,6 +223,9 @@ def create_app() -> Flask:
         if tipo == "ESTIMACION":
             buf = ExportService.estimacion_a_xlsx(proyecto, contenido)
             return send_file(buf, as_attachment=True, download_name=f"{nombre_base}.xlsx")
+        if tipo == "SUPERVISOR":
+            buf = ExportService.supervisor_a_docx(proyecto, contenido)
+            return send_file(buf, as_attachment=True, download_name=f"Informe_Consistencia_{nombre_base}.docx")
         return jsonify({"error": "Tipo desconocido"}), 400
 
     @app.route("/export/<int:proyecto_id>/paquete")
@@ -214,6 +245,8 @@ def create_app() -> Flask:
                 zf.writestr("Casos_de_Prueba.xlsx", ExportService.qa_a_xlsx(proyecto, documentos["QA"]["contenido"]).read())
             if "ESTIMACION" in documentos:
                 zf.writestr("Estimacion.xlsx", ExportService.estimacion_a_xlsx(proyecto, documentos["ESTIMACION"]["contenido"]).read())
+            if "SUPERVISOR" in documentos:
+                zf.writestr("Informe_Consistencia.docx", ExportService.supervisor_a_docx(proyecto, documentos["SUPERVISOR"]["contenido"]).read())
         mem_buf.seek(0)
         nombre = f"AutoDocsAI_{proyecto['cliente']}_{proyecto['proceso']}".replace(" ", "_")
         return send_file(mem_buf, as_attachment=True, download_name=f"{nombre}.zip")

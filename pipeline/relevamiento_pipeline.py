@@ -13,6 +13,7 @@ exactamente la conexión que el enunciado pide construir sin tocar la lógica
 interna de cada Gem.
 """
 import json
+from datetime import datetime
 
 from repositories.proyecto_repository import ProyectoRepository
 from services.validacion_service import ValidacionService
@@ -123,6 +124,31 @@ class RelevamientoPipeline:
         ProyectoRepository.guardar_documento(proyecto_id, "ESTIMACION", estimacion)
 
         # ── 6) Planificación — Agente Supervisor y Consolidador ─────────
+        resultado_supervisor = RelevamientoPipeline.auditar(proyecto_id, pdd, sdd, qa, estimacion)
+
+        # ── 7) Acción completada + estado final ─────────────────────────
+        ProyectoRepository.actualizar(proyecto_id, {"estado": "completado"})
+        ProyectoRepository.log(proyecto_id, "Pipeline",
+                                "Paquete documental listo para revisión humana (Evaluación)", "ok")
+
+        # ── 8) Aprendizaje continuo (semilla) ───────────────────────────
+        # Registra un antecedente mínimo del proyecto en la memoria de
+        # largo plazo. El ajuste fino real ocurre cuando el analista
+        # corrige manualmente un documento (ver /api/proyecto/<id>/feedback).
+        tags = [t for t in [proyecto.get("tecnologia"), proyecto.get("criticidad")] if t]
+        MemoriaService.registrar_aprendizaje(
+            proyecto_id, "feedback", tags,
+            f"Proyecto '{proyecto['proceso']}' ({proyecto['cliente']}) procesado. "
+            f"Alertas de consistencia al cierre: {len(resultado_supervisor['alertas'])}.",
+        )
+
+    @staticmethod
+    def auditar(proyecto_id: int, pdd: str, sdd: str, qa: str, estimacion: str) -> dict:
+        """Invoca al Agente Supervisor y Consolidador, suma el chequeo
+        determinístico de consistencia de horas, persiste cada alerta en la
+        tabla `alertas` y guarda el detalle completo como documento
+        'SUPERVISOR' (exportable desde Resultados). Reutilizado tanto por
+        el pipeline inicial como por el botón 'Volver a auditar'."""
         respuesta_supervisor = GemsService.invocar(
             "supervisor", proyecto_id,
             contenido=(
@@ -138,7 +164,7 @@ class RelevamientoPipeline:
             ProyectoRepository.log(proyecto_id, "Consolidador",
                                     "No se pudo auditar consistencia (falló la Gem Supervisor); "
                                     "los documentos generados quedan disponibles igual.", "warn")
-            resultado_supervisor = {"consistente": False, "alertas": []}
+            resultado_supervisor = {"consistente": False, "alertas": [], "error_gem": respuesta_supervisor}
         else:
             resultado_supervisor = ConsolidacionService.parsear_respuesta_supervisor(respuesta_supervisor)
 
@@ -157,21 +183,12 @@ class RelevamientoPipeline:
             nivel,
         )
 
-        # ── 7) Acción completada + estado final ─────────────────────────
-        ProyectoRepository.actualizar(proyecto_id, {"estado": "completado"})
-        ProyectoRepository.log(proyecto_id, "Pipeline",
-                                "Paquete documental listo para revisión humana (Evaluación)", "ok")
-
-        # ── 8) Aprendizaje continuo (semilla) ───────────────────────────
-        # Registra un antecedente mínimo del proyecto en la memoria de
-        # largo plazo. El ajuste fino real ocurre cuando el analista
-        # corrige manualmente un documento (ver /api/proyecto/<id>/feedback).
-        tags = [t for t in [proyecto.get("tecnologia"), proyecto.get("criticidad")] if t]
-        MemoriaService.registrar_aprendizaje(
-            proyecto_id, "feedback", tags,
-            f"Proyecto '{proyecto['proceso']}' ({proyecto['cliente']}) procesado. "
-            f"Alertas de consistencia al cierre: {len(resultado_supervisor['alertas'])}.",
+        resultado_supervisor["documentos_auditados"] = ["PDD", "SDD", "QA", "ESTIMACION"]
+        resultado_supervisor["fecha_auditoria"] = datetime.now().isoformat(timespec="seconds")
+        ProyectoRepository.guardar_documento(
+            proyecto_id, "SUPERVISOR", json.dumps(resultado_supervisor, ensure_ascii=False)
         )
+        return resultado_supervisor
 
     @staticmethod
     def _abortar_si_error(proyecto_id: int, nombre_paso: str, respuesta: str) -> bool:

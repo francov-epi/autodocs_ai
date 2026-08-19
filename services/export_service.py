@@ -23,6 +23,7 @@ from services.estimacion_service import EstimacionService, FASES_ESPERADAS
 from services.pdd_service import PddService
 from services.sdd_service import SddService
 from services.qa_service import QaService
+from services.supervisor_service import SupervisorService
 
 # Paleta tomada del template histórico de Estimación (Google Sheets → Excel)
 _HEADER_FILL = PatternFill(start_color="C9DAF8", end_color="C9DAF8", fill_type="solid")
@@ -607,6 +608,61 @@ def _qa_a_xlsx_estructurada(proyecto: dict, data: dict) -> io.BytesIO:
     return buf
 
 
+def _supervisor_a_docx_estructurado(proyecto: dict, data: dict) -> io.BytesIO:
+    """Informe de auditoría del Agente Supervisor y Consolidador: si el
+    paquete documental (PDD/SDD/QA/Estimación) es consistente entre sí, y
+    el detalle de cada alerta detectada — tanto las que devuelve la Gem
+    Supervisor como el chequeo determinístico de la Regla de Consistencia
+    de Negocio (punto 7)."""
+    doc = Document()
+    h = doc.add_heading("Informe de Consistencia", level=0)
+    for run in h.runs:
+        run.font.color.rgb = RGBColor(0x1A, 0x2A, 0x5C)
+    doc.add_heading(f"{proyecto.get('cliente','')} — {proyecto.get('proceso','')}", level=1)
+    doc.add_paragraph("Agente Supervisor y Consolidador").italic = True
+    doc.add_paragraph(f"Generado por AutoDocs AI — {datetime.now():%d/%m/%Y %H:%M}")
+    doc.add_paragraph("")
+
+    consistente = bool(data.get("consistente"))
+    p_estado = doc.add_paragraph()
+    run_estado = p_estado.add_run("✔ CONSISTENTE" if consistente else "⚠ REQUIERE REVISIÓN")
+    run_estado.bold = True
+    run_estado.font.color.rgb = RGBColor(0x2E, 0x8B, 0x57) if consistente else RGBColor(0xC0, 0x39, 0x2B)
+    run_estado.font.size = Pt(14)
+
+    _tabla_docx(
+        doc, ["Item", "Detalle"],
+        [
+            ["Documentos auditados", ", ".join(data.get("documentos_auditados", [])) or "—"],
+            ["Fecha de auditoría", data.get("fecha_auditoria") or "—"],
+            ["Cantidad de alertas", str(len(data.get("alertas", [])))],
+        ],
+    )
+
+    doc.add_heading("Alertas detectadas", level=2)
+    alertas = data.get("alertas") or []
+    if alertas:
+        for i, a in enumerate(alertas, start=1):
+            doc.add_paragraph(f"{i}. {a}", style="List Bullet")
+    else:
+        doc.add_paragraph("Sin observaciones de consistencia entre PDD, SDD, QA y Estimación.")
+
+    if data.get("error_gem"):
+        doc.add_heading("Nota", level=2)
+        p_err = doc.add_paragraph()
+        p_err.add_run(
+            "La Gem Supervisor no pudo responder durante esta auditoría (error de conexión "
+            "con Gemini); las alertas listadas arriba son únicamente las del chequeo "
+            "determinístico de consistencia de horas. Detalle del error: "
+        ).italic = True
+        p_err.add_run(str(data["error_gem"])[:500]).italic = True
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf
+
+
 def _xlsx_desde_texto(titulo: str, cuerpo: str) -> io.BytesIO:
     wb = Workbook()
     ws = wb.active
@@ -709,3 +765,12 @@ class ExportService:
         if EstimacionService.horas_totales(data) == 0 and not data.get("detalle_desarrollo"):
             return _xlsx_desde_texto(f"Estimación — {proyecto['proceso']}", contenido)
         return _estimacion_a_xlsx_estructurada(proyecto, data)
+
+    @staticmethod
+    def supervisor_a_docx(proyecto: dict, contenido: str) -> io.BytesIO:
+        """El documento SUPERVISOR se guarda ya en el formato propio de la
+        aplicación (ver RelevamientoPipeline._auditar), no como respuesta
+        cruda de una Gem — SupervisorService solo necesita un json.loads
+        tolerante, sin heurísticas de fallback complejas."""
+        data = SupervisorService.parsear(contenido)
+        return _supervisor_a_docx_estructurado(proyecto, data)

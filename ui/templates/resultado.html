@@ -53,7 +53,26 @@
 
   <div class="flex flex-col gap-4">
     <div class="panel">
-      <div class="panel-title"><span class="dot"></span>Alertas del Supervisor</div>
+      <div class="panel-title">
+        <span class="dot"></span>Informe del Agente Supervisor
+        <span class="nav-spacer"></span>
+        {% if documentos.get('SUPERVISOR') %}
+        <button type="button" class="btn btn-secondary btn-sm" onclick="reauditar()">Volver a auditar</button>
+        {% endif %}
+      </div>
+      {% if documentos.get('SUPERVISOR') %}
+        <div class="result-box" id="resumen-supervisor" style="white-space:pre-wrap">{{ resumen_supervisor }}</div>
+        <a href="/export/{{ proyecto.id }}/SUPERVISOR" class="btn btn-secondary btn-sm mt-2">Exportar informe (.docx)</a>
+      {% else %}
+        <p class="result-box empty">Todavía no se corrió la auditoría de consistencia para este proyecto.</p>
+        <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="reauditar()">Auditar ahora</button>
+      {% endif %}
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">
+        <span class="dot"></span>Alertas registradas ({{ alertas|length }})
+      </div>
       {% if alertas %}
         {% for a in alertas %}
         <div class="kv"><div class="kv-val" style="color:var(--amber)">{{ a.mensaje }}</div></div>
@@ -150,6 +169,17 @@ async function registrarFeedback() {
     document.getElementById('feedback-ok').classList.remove('hidden');
     document.getElementById('feedback-texto').value = '';
     setTimeout(() => document.getElementById('feedback-ok').classList.add('hidden'), 2500);
+  }
+}
+
+async function reauditar() {
+  try {
+    const r = await fetch(`/api/proyecto/${proyectoId}/reauditar`, {method: 'POST'});
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    location.reload();
+  } catch (e) {
+    alert('No se pudo auditar: ' + e.message);
   }
 }
 </script>
