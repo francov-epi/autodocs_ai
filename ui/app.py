@@ -12,6 +12,7 @@ from services.export_service import ExportService
 from services.estimacion_service import EstimacionService
 from services.pdd_service import PddService
 from services.sdd_service import SddService
+from services.qa_service import QaService
 from pipeline.relevamiento_pipeline import RelevamientoPipeline
 
 _TIPOS_DOC = ["PDD", "SDD", "QA", "ESTIMACION"]
@@ -105,6 +106,10 @@ def create_app() -> Flask:
         if "SDD" in documentos:
             resumen_sdd = SddService.resumen_legible(SddService.parsear(documentos["SDD"]["contenido"]))
 
+        resumen_qa = None
+        if "QA" in documentos:
+            resumen_qa = QaService.resumen_legible(QaService.parsear(documentos["QA"]["contenido"]))
+
         return render_template(
             "resultado.html",
             proyecto=proyecto,
@@ -114,6 +119,7 @@ def create_app() -> Flask:
             resumen_estimacion=resumen_estimacion,
             resumen_pdd=resumen_pdd,
             resumen_sdd=resumen_sdd,
+            resumen_qa=resumen_qa,
         )
 
     @app.route("/api/proyecto/<int:proyecto_id>/editar", methods=["POST"])
@@ -148,6 +154,8 @@ def create_app() -> Flask:
             respuesta["resumen"] = PddService.resumen_legible(PddService.parsear(nuevo_contenido))
         elif tipo == "SDD":
             respuesta["resumen"] = SddService.resumen_legible(SddService.parsear(nuevo_contenido))
+        elif tipo == "QA":
+            respuesta["resumen"] = QaService.resumen_legible(QaService.parsear(nuevo_contenido))
         return jsonify(respuesta)
 
     @app.route("/api/proyecto/<int:proyecto_id>/feedback", methods=["POST"])

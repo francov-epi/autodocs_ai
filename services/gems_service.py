@@ -11,28 +11,20 @@ Lo que sí resuelve este módulo:
     relevante + parámetros del proyecto),
   - invocar al proveedor (GeminiProvider) con el modelo y la instrucción
     de sistema configurados para esa Gem,
+  - para las Gems que devuelven JSON, pasar el responseSchema definido en
+    ai/response_schemas.py: no alcanza con pedirle "solo JSON" en el
+    prompt (eso garantiza sintaxis válida pero no los nombres de campo
+    correctos — la Gem SDD llegó a inventar su propia estructura con
+    "seccion_1"/"diagramas" en vez de los campos que el parser espera).
+    responseSchema restringe la generación a la forma exacta declarada,
   - dejar traza en `logs_agenticos` para que el dashboard de Procesamiento
     (Figura 4 del enunciado) pueda mostrar el log de comunicación agéntica,
   - devolver el texto crudo de la Gem para que el pipeline lo persista.
 """
 from core.config_manager import ConfigManager
 from ai.provider_router import ProviderRouter
+from ai.response_schemas import POR_GEM as SCHEMAS_POR_GEM
 from repositories.proyecto_repository import ProyectoRepository
-
-
-_SDD_OUTPUT_CONTRACT = r"""
-REGLA INVIOLABLE DE SALIDA PARA SDD:
-La respuesta DEBE ser exclusivamente un objeto JSON válido que cumpla exactamente el esquema SDD configurado en la aplicación.
-NO uses seccion_1, seccion_2, seccion_3, indice, titulo_documento, nombre_bot, proyecto, cliente, mes_anio, diagramas, documento, data ni ninguna clave adicional.
-NO devuelvas un objeto contenedor. Todas las claves del esquema deben estar en la raíz.
-NO conviertas ninguna lista de objetos en texto. Mantén exactamente arrays de objetos para packages, archivos_flujo, recursos_externos y glosario.
-Para campos escalares como objetivos, como_empezar, ambiente_produccion, datos_entrada, datos_salida y reportes, devuelve SIEMPRE un string, nunca un objeto ni un array.
-En particular, como_empezar debe contener SOLO cómo se dispara/inicia el proceso automático. Las aplicaciones usadas NO deben colocarse dentro de como_empezar.
-Si informas aplicaciones usadas, inclúyelas en ambiente_produccion como texto legible o usa la información para completar los campos correspondientes; nunca generes objetos con claves aplicacion/environment_access dentro de campos escalares.
-objetivos debe describir el objetivo de la automatización; NO debe contener las listas "dentro_alcance" ni "fuera_alcance".
-No serialices objetos como texto con formato Python del tipo {'clave': 'valor'} ni como JSON dentro de strings.
-Si un dato no está disponible, devuelve "" (o [] cuando el campo sea una lista), no inventes ni cambies el tipo.
-"""
 
 
 class GemsService:
@@ -55,17 +47,12 @@ class GemsService:
         provider.model = gem_cfg.get("model", provider.model)
 
         ProyectoRepository.log(proyecto_id, nombre, "consultando…", nivel="info")
-        system_instruction = gem_cfg.get("system_instruction", "")
-        # El contrato SDD se aplica siempre desde la aplicación, incluso si
-        # existe una configuración persistida antigua de la Gem. Así evitamos
-        # que un prompt viejo vuelva a introducir seccion_1/diagramas/etc.
-        if gem_key == "sdd":
-            system_instruction = system_instruction.rstrip() + "\n\n" + _SDD_OUTPUT_CONTRACT
-
+        es_json = gem_cfg.get("output_format") == "json"
         respuesta = provider.analyze(
             prompt=contenido,
-            system_instruction=system_instruction,
-            response_json=(gem_key == "sdd" or gem_cfg.get("output_format") == "json"),
+            system_instruction=gem_cfg.get("system_instruction", ""),
+            response_json=es_json,
+            response_schema=SCHEMAS_POR_GEM.get(gem_key) if es_json else None,
         )
         if GemsService.es_error(respuesta):
             ProyectoRepository.log(proyecto_id, nombre, f"error: {respuesta[:300]}", nivel="error")

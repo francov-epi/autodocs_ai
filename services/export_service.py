@@ -22,6 +22,7 @@ from openpyxl.utils import get_column_letter
 from services.estimacion_service import EstimacionService, FASES_ESPERADAS
 from services.pdd_service import PddService
 from services.sdd_service import SddService
+from services.qa_service import QaService
 
 # Paleta tomada del template histórico de Estimación (Google Sheets → Excel)
 _HEADER_FILL = PatternFill(start_color="C9DAF8", end_color="C9DAF8", fill_type="solid")
@@ -533,6 +534,79 @@ def _estimacion_a_xlsx_estructurada(proyecto: dict, data: dict) -> io.BytesIO:
     return buf
 
 
+def _qa_a_xlsx_estructurada(proyecto: dict, data: dict) -> io.BytesIO:
+    """Arma la matriz de Casos de Prueba con el mismo layout que el template
+    histórico: título navy, grupos 'Caso de prueba'/'Escenario' en azul, y
+    columnas de ejecución manual (Status/Evidencia/Observaciones/Test
+    realizado por/Fecha Test) en blanco para que el equipo de QA las
+    complete cuando efectivamente ejecute los casos."""
+    TITLE_FILL = PatternFill(start_color="073763", end_color="073763", fill_type="solid")
+    GROUP_FILL = PatternFill(start_color="0B5394", end_color="0B5394", fill_type="solid")
+    WHITE_BOLD = Font(bold=True, color="FFFFFF")
+    HEADER_FONT = Font(color="F3F3F3")
+    WRAP = Alignment(wrap_text=True, vertical="top")
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Casos de Prueba"
+
+    headers = ["Número", "Versión", "Módulo", "Funcionalidad", "Nombre del caso de prueba",
+               "Precondiciones", "Instrucciones de ejecución", "Resultado esperado", "Status",
+               "Criticidad", "Evidencia gráfica", "Observaciones", "Test realizado por", "Fecha Test"]
+    n_cols = len(headers)
+
+    nombre_proceso = data.get("modulo_general") or f"{proyecto.get('cliente','')} - {proyecto.get('proceso','')}"
+    ws.cell(row=1, column=1, value=f"ESPECIFICACIÓN DE CASOS DE PRUEBA — {nombre_proceso}")
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=n_cols)
+    for col in range(1, n_cols + 1):
+        c = ws.cell(row=1, column=col)
+        c.fill = TITLE_FILL
+        c.font = WHITE_BOLD
+
+    ws.cell(row=2, column=1, value="Caso de prueba")
+    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=8)
+    ws.cell(row=2, column=9, value="Escenario")
+    ws.merge_cells(start_row=2, start_column=9, end_row=2, end_column=n_cols)
+    for col in range(1, n_cols + 1):
+        c = ws.cell(row=2, column=col)
+        c.fill = GROUP_FILL
+        c.font = WHITE_BOLD
+
+    for i, h in enumerate(headers, start=1):
+        c = ws.cell(row=3, column=i, value=h)
+        c.fill = GROUP_FILL
+        c.font = HEADER_FONT
+        c.alignment = WRAP
+
+    fila = 4
+    for caso in data.get("casos", []):
+        if not isinstance(caso, dict):
+            continue
+        valores = [
+            caso.get("numero", ""), caso.get("version", "1.0"), caso.get("modulo", ""),
+            caso.get("funcionalidad", ""), caso.get("nombre_caso", ""), caso.get("precondiciones", ""),
+            caso.get("instrucciones_ejecucion", ""), caso.get("resultado_esperado", ""),
+            "",  # Status: en blanco, lo completa QA al ejecutar
+            caso.get("criticidad", ""),
+            "", "", "", "",  # Evidencia gráfica / Observaciones / Test realizado por / Fecha Test
+        ]
+        for col, val in enumerate(valores, start=1):
+            cell_obj = ws.cell(row=fila, column=col, value=val)
+            cell_obj.alignment = WRAP
+        fila += 1
+
+    anchos = {"A": 8, "B": 8, "C": 20, "D": 22, "E": 28, "F": 24, "G": 32, "H": 32,
+              "I": 8, "J": 11, "K": 30, "L": 30, "M": 16, "N": 13}
+    for col_letter, w in anchos.items():
+        ws.column_dimensions[col_letter].width = w
+    ws.freeze_panes = "A4"
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf
+
+
 def _xlsx_desde_texto(titulo: str, cuerpo: str) -> io.BytesIO:
     wb = Workbook()
     ws = wb.active
@@ -614,7 +688,15 @@ class ExportService:
 
     @staticmethod
     def qa_a_xlsx(proyecto: dict, contenido: str) -> io.BytesIO:
-        return _xlsx_desde_texto(f"QA — {proyecto['proceso']}", contenido)
+        """La Gem QA responde en JSON (ver system_instruction en
+        config_manager). Se parsea con QaService y se arma la planilla con
+        el layout del template histórico. Si el contenido no es
+        interpretable como matriz de casos de prueba, degrada al volcado
+        de texto genérico en vez de romper la descarga."""
+        data = QaService.parsear(contenido)
+        if not data.get("casos"):
+            return _xlsx_desde_texto(f"QA — {proyecto['proceso']}", contenido)
+        return _qa_a_xlsx_estructurada(proyecto, data)
 
     @staticmethod
     def estimacion_a_xlsx(proyecto: dict, contenido: str) -> io.BytesIO:
