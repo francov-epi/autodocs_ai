@@ -9,6 +9,20 @@ Gemini (Ingesta, PDD, SDD, QA, Estimación y Supervisor) para producir un
 paquete documental completo (PDD, SDD, matriz de casos de prueba y planilla
 de estimación) listo para revisión humana.
 
+## Flujo de uso
+
+1. **Nuevo Relevamiento**: se sube o pega la transcripción del relevamiento
+   con el cliente (podés usar `samples/transcripcion_ejemplo.txt`).
+2. **Validación y sanitización**: el texto pasa por el Límite Operativo de
+   Entrada y por el servicio de PII antes de llegar a cualquier Gem.
+3. **Procesamiento**: el pipeline recorre el pool de Gems (Ingesta → PDD →
+   SDD → QA → Estimación → Supervisor), dejando un log de la comunicación
+   agéntica en cada paso.
+4. **Resultado**: se consolida el paquete documental y queda disponible para
+   descarga en Word (PDD/SDD) y Excel (QA/Estimación).
+5. **Memoria**: los aprendizajes del proyecto quedan disponibles para
+   relevamientos futuros desde la sección Memoria.
+
 ## Qué está desarrollado y qué no
 
 Siguiendo el pedido del enunciado, esta implementación construye **toda la
